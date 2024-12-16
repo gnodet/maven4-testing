@@ -197,7 +197,9 @@ jobs:
                 const tableStartIndex = lines.findIndex(line => line.startsWith('|Project|'));
                 const tableEndIndex = lines.findIndex((line, index) => index > tableStartIndex && line.trim() === '');
             
-                const allRows = [...existingRows, entry];
+                // Keep only the table header and sorted rows
+                const tableRows = lines.slice(tableStartIndex, tableEndIndex);
+                const allRows = [...tableRows, entry];
                 const sortedRows = allRows.sort((a, b) => {
                   const aFirstColumn = a.split('|')[1].trim();
                   const bFirstColumn = b.split('|')[1].trim();
