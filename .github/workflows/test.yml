@@ -223,13 +223,12 @@ jobs:
                   newTable = tableHeader + '\n' + updatedRows.join('\n') + '\n' + entry;
                 }
                 
-                const summaryBody = `# Maven 4 Compatibility Testing Summary
-
-Testing with Maven version: ${mavenVersion}
-Last updated: ${new Date().toISOString()}
-
-${newTable}`;
-                
+                const summaryBody = 
+                  "# Maven 4 Compatibility Testing Summary\n\n" +
+                  "Testing with Maven version: " + mavenVersion + "\n" +
+                  "Last updated: " + new Date().toISOString() + "\n\n" +
+                  newTable;
+                  
                 if (existingSummary) {
                   await github.rest.issues.update({
                     owner: context.repo.owner,
