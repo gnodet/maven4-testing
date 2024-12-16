@@ -206,12 +206,10 @@ jobs:
                   return aFirstColumn.localeCompare(bFirstColumn);
                 });
             
-                const newTable = [
+                return [
                   tableHeader,
                   ...sortedRows
                 ].join('\n');
-            
-                return newTable.join('\n');
               }
             
               const firstErrorLine = buildError.split('\n')[0];
