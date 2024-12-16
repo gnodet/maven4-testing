@@ -126,6 +126,8 @@ jobs:
                 state: 'all',
                 labels: 'maven4-testing'
               });
+            
+              const truncatedLog = buildError.length > 60000 ? '...' + buildError.slice(-maxLength) : buildError;
 
               const body = 
                 "# Maven 4 Compatibility Test Report\n\n" +
@@ -144,7 +146,7 @@ jobs:
                   "<details>\n" +
                   "<summary>Build Error Details</summary>\n\n" +
                   "```\n" +
-                  buildError + "\n" +
+                  truncatedLog + "\n" +
                   "```\n" +
                   "</details>\n" 
                   : "");
