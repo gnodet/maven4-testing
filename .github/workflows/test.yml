@@ -46,6 +46,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: apache/${{ matrix.repository }}
+          path: project
           
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -80,7 +81,7 @@ jobs:
                 const versionInfo = execSync('cat maven_version.txt').toString();
                 
                 console.log('Running Maven build...');
-                const buildOutput = execSync('mvn -V -B package -DskipTests 2>&1', { encoding: 'utf8' });
+                const buildOutput = execSync('mvn -V -B package -DskipTests 2>&1', { encoding: 'utf8', cwd: process.cwd() + '/project' });
                 buildSuccess = true;
                 mavenOutput = versionInfo;
                 buildError = buildOutput;
