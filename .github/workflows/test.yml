@@ -176,7 +176,7 @@ jobs:
               return { issueNumber, status };
             }
 
-            async function updateSummaryTable(github, context, repo, status, issueNumber, mavenVersion) {
+            async function updateSummaryTable(github, context, repo, status, issueNumber, buildError, mavenVersion) {
               const summaryTitle = `Maven 4 Compatibility Summary (${mavenVersion})`;
               const summaryIssues = await github.rest.issues.listForRepo({
                 owner: context.repo.owner,
@@ -267,5 +267,5 @@ jobs:
               );
 
               // Update summary table
-              await updateSummaryTable(github, context, repo, status, issueNumber, mavenVersion);
+              await updateSummaryTable(github, context, repo, status, issueNumber, buildError, mavenVersion);
             })();
