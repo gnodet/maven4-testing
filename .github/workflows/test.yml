@@ -69,7 +69,8 @@ jobs:
         continue-on-error: true
         run: |
           mvn -V -B clean package -DskipTests
-          echo "build_exit_code=$?" >> $GITHUB_OUTPUT
+          build_exit_code=$?
+          echo "build_exit_code=$build_exit_code" >> "$GITHUB_OUTPUT"
           mvn -version > maven_version.txt
           echo "BUILD_LOG<<EOF" >> $GITHUB_ENV
           cat maven_version.txt >> $GITHUB_ENV
