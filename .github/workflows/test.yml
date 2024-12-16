@@ -88,29 +88,6 @@ jobs:
                 buildSuccess = false;
                 mavenOutput = execSync('cat maven_version.txt').toString();
                 buildError = error.stdout || error.message;
-
-                // Extract error section from the output
-                const lines = buildError.split('\n');
-                const errorLines = [];
-                let inErrorSection = false;
-                
-                for (let i = lines.length - 1; i >= 0; i--) {
-                  const line = lines[i];
-                  if (line.includes('[ERROR]')) {
-                    inErrorSection = true;
-                    errorLines.unshift(line);
-                  } else if (inErrorSection && line.trim() === '') {
-                    inErrorSection = false;
-                  } else if (inErrorSection) {
-                    errorLines.unshift(line);
-                  }
-                }
-                
-                buildError = errorLines.join('\n') || 'Build failed without error output';
-                
-                // Add first error line at the end of the build output
-                const firstErrorLine = errorLines[0];
-                buildError += `\n\nFirst Error Line: ${firstErrorLine}`;
               }
 
               return { buildSuccess, mavenOutput, buildError };
@@ -210,7 +187,7 @@ jobs:
               // Process table update with first error line
               function processTableUpdate(currentBody, firstErrorLine) {
                 const tableHeader = '|Project|Status|Details|Error|\n|---|---|---|---|';
-                const entry = `|${repo}|${status}|[Details](${issueUrl})|First Error Line: ${firstErrorLine}`;
+                const entry = `|${repo}|${status}|[Details](${issueUrl})|${firstErrorLine}`;
             
                 const lines = currentBody.split('\n');
                 const tableStartIndex = lines.findIndex(line => line.startsWith('|Project|'));
@@ -237,7 +214,7 @@ jobs:
                 "Testing with Maven version: " + mavenVersion + "\n" +
                 "Last updated: " + new Date().toISOString() + "\n\n" +
                 (existingSummary ? processTableUpdate(existingSummary.body, firstErrorLine) : 
-                  '|Project|Status|Details|Error|\n|---|---|---|---|' + `\n|${repo}|${status}|[Details](${issueUrl})|First Error Line: ${firstErrorLine}|`);
+                  '|Project|Status|Details|Error|\n|---|---|---|---|' + `\n|${repo}|${status}|[Details](${issueUrl})|${firstErrorLine}|`);
             
               const clientMutationId = `maven4-summary-${Date.now()}`;
 
