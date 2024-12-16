@@ -69,175 +69,178 @@ jobs:
         with:
           script: |
             const { execSync } = require('child_process');
-            
-            // Run Maven build and capture output
-            let buildSuccess = false;
-            let mavenOutput = '';
-            let buildError = '';
-            
-            try {
-              execSync('mvn -version > maven_version.txt');
-              const versionInfo = execSync('cat maven_version.txt').toString();
-              
-              console.log('Running Maven build...');
-              const buildOutput = execSync('mvn -V -B clean package -DskipTests 2>&1', { encoding: 'utf8' });
-              buildSuccess = true;
-              mavenOutput = versionInfo;
-              buildError = buildOutput; // Store full output in case we need it
-            } catch (error) {
-              buildSuccess = false;
-              mavenOutput = execSync('cat maven_version.txt').toString();
-              buildError = error.stdout || error.message;
 
-              // Extract error section from the output
-              const lines = buildError.split('\n');
-              const errorLines = [];
-              let inErrorSection = false;
-              
-              for (let i = lines.length - 1; i >= 0; i--) {
-                const line = lines[i];
-                if (line.includes('[ERROR]')) {
-                  inErrorSection = true;
-                  errorLines.unshift(line);
-                } else if (inErrorSection && line.trim() === '') {
-                  inErrorSection = false;
-                } else if (inErrorSection) {
-                  errorLines.unshift(line);
-                }
-              }
-              
-              buildError = errorLines.join('\n') || 'Build failed without error output';
-            }
-            
-            console.log('Build success:', buildSuccess);
-            
-            const status = buildSuccess ? '✅ Success' : '❌ Failed';
-            const repo = '${{ matrix.repository }}';
-            const mavenVersion = '${{ github.event.inputs.maven_version }}';
-            const issueTitle = `Maven 4 Test Results: ${repo} (${mavenVersion})`;
-            const chunkNumber = '${{ github.event.inputs.chunk_number }}';
-            
-            // Create/update individual project issue first to get its number
-            const issues = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'all',
-              labels: 'maven4-testing'
-            });
-            
-            const existingIssue = issues.data.find(issue => issue.title === issueTitle);
-            let issueNumber;
-            
-            const body = 
-              "# Maven 4 Compatibility Test Report\n\n" +
-              `- **Repository**: ${repo}\n` +
-              `- **Status**: ${status}\n` +
-              `- **Maven Version**: ${mavenVersion}\n` +
-              `- **Test Date**: ${new Date().toISOString()}\n` +
-              `- **Chunk**: ${chunkNumber}\n\n` +
-              "<details>\n" +
-              "<summary>Maven Version Info</summary>\n\n" +
-              "```\n" +
-              mavenOutput + "\n" +
-              "```\n" +
-              "</details>\n\n" +
-              (!buildSuccess ? 
-                "<details>\n" +
-                "<summary>Build Error Details</summary>\n\n" +
-                "```\n" +
-                buildError + "\n" +
-                "```\n" +
-                "</details>\n" 
-                : "");
+            async function runMavenBuild() {
+              let buildSuccess = false;
+              let mavenOutput = '';
+              let buildError = '';
 
-            if (existingIssue) {
-              await github.rest.issues.update({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: existingIssue.number,
-                body: body,
-                state: 'open',
-                labels: ['maven4-testing', buildSuccess ? 'success' : 'failed']
-              });
-              issueNumber = existingIssue.number;
-            } else {
-              const newIssue = await github.rest.issues.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title: issueTitle,
-                body: body,
-                labels: ['maven4-testing', buildSuccess ? 'success' : 'failed']
-              });
-              issueNumber = newIssue.data.number;
-            }
-            
-            // Update summary table with retries for concurrent modifications
-            const summaryTitle = `Maven 4 Compatibility Summary (${mavenVersion})`;
-            async function updateSummaryTable(retryCount = 0) {
-              if (retryCount > 5) {
-                console.log('Failed to update summary table after 5 retries');
-                return;
-              }
-              
               try {
-                const summaryIssues = await github.rest.issues.listForRepo({
+                execSync('mvn -version > maven_version.txt');
+                const versionInfo = execSync('cat maven_version.txt').toString();
+                
+                console.log('Running Maven build...');
+                const buildOutput = execSync('mvn -V -B clean package -DskipTests 2>&1', { encoding: 'utf8' });
+                buildSuccess = true;
+                mavenOutput = versionInfo;
+                buildError = buildOutput;
+              } catch (error) {
+                buildSuccess = false;
+                mavenOutput = execSync('cat maven_version.txt').toString();
+                buildError = error.stdout || error.message;
+
+                // Extract error section from the output
+                const lines = buildError.split('\n');
+                const errorLines = [];
+                let inErrorSection = false;
+                
+                for (let i = lines.length - 1; i >= 0; i--) {
+                  const line = lines[i];
+                  if (line.includes('[ERROR]')) {
+                    inErrorSection = true;
+                    errorLines.unshift(line);
+                  } else if (inErrorSection && line.trim() === '') {
+                    inErrorSection = false;
+                  } else if (inErrorSection) {
+                    errorLines.unshift(line);
+                  }
+                }
+                
+                buildError = errorLines.join('\n') || 'Build failed without error output';
+              }
+
+              return { buildSuccess, mavenOutput, buildError };
+            }
+
+            async function createOrUpdateIndividualProjectIssue(github, context, repo, buildSuccess, mavenOutput, buildError, mavenVersion, chunkNumber) {
+              const status = buildSuccess ? '✅ Success' : '❌ Failed';
+              const issueTitle = `Maven 4 Test Results: ${repo} (${mavenVersion})`;
+
+              const issues = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'all',
+                labels: 'maven4-testing'
+              });
+
+              const body = 
+                "# Maven 4 Compatibility Test Report\n\n" +
+                `- **Repository**: ${repo}\n` +
+                `- **Status**: ${status}\n` +
+                `- **Maven Version**: ${mavenVersion}\n` +
+                `- **Test Date**: ${new Date().toISOString()}\n` +
+                `- **Chunk**: ${chunkNumber}\n\n` +
+                "<details>\n" +
+                "<summary>Maven Version Info</summary>\n\n" +
+                "```\n" +
+                mavenOutput + "\n" +
+                "```\n" +
+                "</details>\n\n" +
+                (!buildSuccess ? 
+                  "<details>\n" +
+                  "<summary>Build Error Details</summary>\n\n" +
+                  "```\n" +
+                  buildError + "\n" +
+                  "```\n" +
+                  "</details>\n" 
+                  : "");
+
+              const existingIssue = issues.data.find(issue => issue.title === issueTitle);
+              let issueNumber;
+
+              if (existingIssue) {
+                await github.rest.issues.update({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
-                  state: 'all',
-                  labels: 'maven4-summary'
+                  issue_number: existingIssue.number,
+                  body: body,
+                  state: 'open',
+                  labels: ['maven4-testing', buildSuccess ? 'success' : 'failed']
                 });
-                
-                const existingSummary = summaryIssues.data.find(issue => issue.title === summaryTitle);
-                let currentTable = '';
-                
-                if (existingSummary) {
-                  // Parse existing table
-                  const tableLines = existingSummary.body.split('\n');
-                  let tableStart = -1;
-                  let tableEnd = -1;
-                  
-                  for (let i = 0; i < tableLines.length; i++) {
-                    if (tableLines[i].startsWith('|Project|')) {
-                      tableStart = i;
-                    } else if (tableStart !== -1 && tableLines[i].trim() === '') {
-                      tableEnd = i;
-                      break;
-                    }
-                  }
-                  
-                  if (tableStart !== -1) {
-                    currentTable = tableLines.slice(tableStart, tableEnd).join('\n');
-                  }
-                }
-                
-                // Create or update table entry
-                const issueUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/issues/${issueNumber}`;
-                const entry = `|${repo}|${status}|[Details](${issueUrl})|`;
+                issueNumber = existingIssue.number;
+              } else {
+                const newIssue = await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: issueTitle,
+                  body: body,
+                  labels: ['maven4-testing', buildSuccess ? 'success' : 'failed']
+                });
+                issueNumber = newIssue.data.number;
+              }
+
+              return { issueNumber, status };
+            }
+
+            async function updateSummaryTable(github, context, repo, status, issueNumber, mavenVersion) {
+              const summaryTitle = `Maven 4 Compatibility Summary (${mavenVersion})`;
+              const summaryIssues = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'all',
+                labels: 'maven4-summary'
+              });
+
+              const existingSummary = summaryIssues.data.find(issue => issue.title === summaryTitle);
+              const issueUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/issues/${issueNumber}`;
+
+              // Function to process table update with atomic replacement
+              function processTableUpdate(currentBody) {
                 const tableHeader = '|Project|Status|Details|\n|---|---|---|';
-                
-                let newTable;
-                if (!currentTable) {
-                  newTable = tableHeader + '\n' + entry;
-                } else {
-                  const rows = currentTable.split('\n').slice(2); // Skip header rows
-                  const updatedRows = rows.filter(row => !row.startsWith(`|${repo}|`));
-                  newTable = tableHeader + '\n' + updatedRows.join('\n') + '\n' + entry;
-                }
-                
-                const summaryBody = 
-                  "# Maven 4 Compatibility Testing Summary\n\n" +
-                  "Testing with Maven version: " + mavenVersion + "\n" +
-                  "Last updated: " + new Date().toISOString() + "\n\n" +
-                  newTable;
-                  
+                const entry = `|${repo}|${status}|[Details](${issueUrl})|`;
+
+                // Parse existing body
+                const lines = currentBody.split('\n');
+                const tableStartIndex = lines.findIndex(line => line.startsWith('|Project|'));
+                const tableEndIndex = lines.findIndex((line, index) => 
+                  index > tableStartIndex && line.trim() === '');
+
+                // Keep existing rows except for the current repo
+                const existingRows = lines
+                  .slice(tableStartIndex + 2, tableEndIndex)
+                  .filter(row => !row.startsWith(`|${repo}|`));
+
+                // Reconstruct the table
+                const newTable = [
+                  tableHeader,
+                  ...existingRows,
+                  entry
+                ].join('\n');
+
+                // Replace the table in the body
+                lines.splice(tableStartIndex, tableEndIndex - tableStartIndex, newTable);
+
+                return lines.join('\n');
+              }
+
+              // Prepare summary body
+              const summaryBody = 
+                "# Maven 4 Compatibility Testing Summary\n\n" +
+                "Testing with Maven version: " + mavenVersion + "\n" +
+                "Last updated: " + new Date().toISOString() + "\n\n" +
+                (existingSummary ? processTableUpdate(existingSummary.body) : 
+                  '|Project|Status|Details|\n|---|---|---|' + `\n|${repo}|${status}|[Details](${issueUrl})|`);
+
+              // Use GraphQL mutation with clientMutationId for optimistic locking
+              const clientMutationId = `maven4-summary-${Date.now()}`;
+
+              try {
                 if (existingSummary) {
-                  await github.rest.issues.update({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    issue_number: existingSummary.number,
-                    body: summaryBody,
-                    state: 'open',
-                    labels: ['maven4-summary']
+                  await github.graphql(`
+                    mutation UpdateIssue($input: UpdateIssueInput!) {
+                      updateIssue(input: $input) {
+                        issue {
+                          id
+                        }
+                        clientMutationId
+                      }
+                    }
+                  `, {
+                    input: {
+                      id: existingSummary.node_id,
+                      body: summaryBody,
+                      clientMutationId: clientMutationId
+                    }
                   });
                 } else {
                   await github.rest.issues.create({
@@ -249,14 +252,22 @@ jobs:
                   });
                 }
               } catch (error) {
-                if (error.status === 422) {
-                  // Concurrent modification detected, retry
-                  console.log('Concurrent modification detected, retrying...');
-                  await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
-                  return updateSummaryTable(retryCount + 1);
-                }
+                console.error('Error updating summary table:', error);
                 throw error;
               }
             }
-            
-            await updateSummaryTable();
+
+            module.exports = async ({ github, context }) => {
+              const { buildSuccess, mavenOutput, buildError } = await runMavenBuild();
+              const repo = '${{ matrix.repository }}';
+              const mavenVersion = '${{ github.event.inputs.maven_version }}';
+              const chunkNumber = '${{ github.event.inputs.chunk_number }}';
+
+              // Create/update individual project issue
+              const { issueNumber, status } = await createOrUpdateIndividualProjectIssue(
+                github, context, repo, buildSuccess, mavenOutput, buildError, mavenVersion, chunkNumber
+              );
+
+              // Update summary table
+              await updateSummaryTable(github, context, repo, status, issueNumber, mavenVersion);
+            };
