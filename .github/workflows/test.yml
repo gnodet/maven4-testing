@@ -127,7 +127,8 @@ jobs:
                 labels: 'maven4-testing'
               });
             
-              const truncatedLog = buildError.length > 60000 ? '...' + buildError.slice(-maxLength) : buildError;
+              const maxLength = 60000;
+              const truncatedLog = buildError.length > maxLength ? '...' + buildError.slice(-maxLength) : buildError;
 
               const body = 
                 "# Maven 4 Compatibility Test Report\n\n" +
@@ -184,7 +185,7 @@ jobs:
                 const line = lines[i];
                 if (line.startsWith('[ERROR]')) {
                   // Check the next line to ensure it's not another [ERROR]
-                  if (i < lines.length - 1 && !lines[i + 1].startsWith('[ERROR]')) {
+                  if (i > 0 && !lines[i - 1].startsWith('[ERROR]')) {
                     return line;
                   } else if (i === 0) { // Handle the case where the last error line has no subsequent non-error line
                     return line;
