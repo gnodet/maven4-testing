@@ -127,29 +127,27 @@ jobs:
             const existingIssue = issues.data.find(issue => issue.title === issueTitle);
             let issueNumber;
             
-            const body = `# Maven 4 Compatibility Test Report
-
-- **Repository**: ${repo}
-- **Status**: ${status}
-- **Maven Version**: ${mavenVersion}
-- **Test Date**: ${new Date().toISOString()}
-- **Chunk**: ${{ github.event.inputs.chunk_number }}
-
-<details>
-<summary>Maven Version Info</summary>
-
-\`\`\`
-${mavenOutput}
-\`\`\`
-</details>
-
-${!buildSuccess ? `<details>
-<summary>Build Error Details</summary>
-
-\`\`\`
-${buildError}
-\`\`\`
-</details>` : ''}`;
+            const body = 
+              "# Maven 4 Compatibility Test Report\n\n" +
+              `- **Repository**: ${repo}\n` +
+              `- **Status**: ${status}\n` +
+              `- **Maven Version**: ${mavenVersion}\n` +
+              `- **Test Date**: ${new Date().toISOString()}\n` +
+              `- **Chunk**: ${github.event.inputs.chunk_number}\n\n` +
+              "<details>\n" +
+              "<summary>Maven Version Info</summary>\n\n" +
+              "```\n" +
+              mavenOutput + "\n" +
+              "```\n" +
+              "</details>\n\n" +
+              (!buildSuccess ? 
+                "<details>\n" +
+                "<summary>Build Error Details</summary>\n\n" +
+                "```\n" +
+                buildError + "\n" +
+                "```\n" +
+                "</details>\n" 
+                : "");
 
             if (existingIssue) {
               await github.rest.issues.update({
