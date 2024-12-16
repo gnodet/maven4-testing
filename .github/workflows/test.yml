@@ -70,8 +70,10 @@ jobs:
         shell: bash
         run: |
           mvn -V -B clean package -DskipTests
-          BUILD_EXIT_CODE=$?
-          echo "build_exit_code=${BUILD_EXIT_CODE}" >> "${GITHUB_OUTPUT}"
+          MAVEN_EXIT_CODE=$?
+          # Set the output variable
+          echo "build_exit_code=${MAVEN_EXIT_CODE}" >> "${GITHUB_OUTPUT}"          
+          # Generate the version info
           mvn -version > maven_version.txt
           echo "BUILD_LOG<<EOF" >> $GITHUB_ENV
           cat maven_version.txt >> $GITHUB_ENV
@@ -80,11 +82,11 @@ jobs:
       - name: Report Results
         uses: actions/github-script@v7
         env:
-          BUILD_EXIT_CODE: ${{ steps.build.outputs.build_exit_code }}
+          MAVEN_EXIT_CODE: ${{ steps.build.outputs.build_exit_code }}
         with:
           script: |
-            console.log('Build exit code:', process.env.BUILD_EXIT_CODE);
-            const buildSuccess = Number(process.env.BUILD_EXIT_CODE) === 0;
+            console.log('Build exit code:', process.env.MAVEN_EXIT_CODE);
+            const buildSuccess = Number(process.env.MAVEN_EXIT_CODE) === 0;
             const status = buildSuccess ? '✅ Success' : '❌ Failed';
             const repo = '${{ matrix.repository }}';
             const mavenVersion = '${{ github.event.inputs.maven_version }}';
