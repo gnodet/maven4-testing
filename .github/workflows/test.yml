@@ -1,5 +1,9 @@
 name: Maven 4 Compatibility Testing
 
+permissions:
+  contents: read
+  issues: write    # Add this to allow creating issues
+
 on:
   workflow_dispatch:
     inputs:
