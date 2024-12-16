@@ -80,7 +80,7 @@ jobs:
                 const versionInfo = execSync('cat maven_version.txt').toString();
                 
                 console.log('Running Maven build...');
-                const buildOutput = execSync('mvn -V -B clean package -DskipTests 2>&1', { encoding: 'utf8' });
+                const buildOutput = execSync('mvn -V -B package -DskipTests 2>&1', { encoding: 'utf8' });
                 buildSuccess = true;
                 mavenOutput = versionInfo;
                 buildError = buildOutput;
@@ -107,6 +107,10 @@ jobs:
                 }
                 
                 buildError = errorLines.join('\n') || 'Build failed without error output';
+                
+                // Add first error line at the end of the build output
+                const firstErrorLine = errorLines[0];
+                buildError += `\n\nFirst Error Line: ${firstErrorLine}`;
               }
 
               return { buildSuccess, mavenOutput, buildError };
@@ -183,45 +187,39 @@ jobs:
 
               const existingSummary = summaryIssues.data.find(issue => issue.title === summaryTitle);
               const issueUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/issues/${issueNumber}`;
-
-              // Function to process table update with atomic replacement
-              function processTableUpdate(currentBody) {
+            
+              // Process table update with first error line
+              function processTableUpdate(currentBody, firstErrorLine) {
                 const tableHeader = '|Project|Status|Details|\n|---|---|---|';
-                const entry = `|${repo}|${status}|[Details](${issueUrl})|`;
-
-                // Parse existing body
+                const entry = `|${repo}|${status}|[Details](${issueUrl})|First Error Line: ${firstErrorLine}`;
+            
                 const lines = currentBody.split('\n');
                 const tableStartIndex = lines.findIndex(line => line.startsWith('|Project|'));
-                const tableEndIndex = lines.findIndex((line, index) => 
-                  index > tableStartIndex && line.trim() === '');
-
-                // Keep existing rows except for the current repo
-                const existingRows = lines
-                  .slice(tableStartIndex + 2, tableEndIndex)
-                  .filter(row => !row.startsWith(`|${repo}|`));
-
-                // Reconstruct the table
+                const tableEndIndex = lines.findIndex((line, index) => index > tableStartIndex && line.trim() === '');
+            
+                const allRows = [...existingRows, entry];
+                const sortedRows = allRows.sort((a, b) => {
+                  const aFirstColumn = a.split('|')[1].trim();
+                  const bFirstColumn = b.split('|')[1].trim();
+                  return aFirstColumn.localeCompare(bFirstColumn);
+                });
+            
                 const newTable = [
                   tableHeader,
-                  ...existingRows,
-                  entry
+                  ...sortedRows
                 ].join('\n');
-
-                // Replace the table in the body
-                lines.splice(tableStartIndex, tableEndIndex - tableStartIndex, newTable);
-
-                return lines.join('\n');
+            
+                return newTable.join('\n');
               }
-
-              // Prepare summary body
+            
+              const firstErrorLine = buildError.split('\n')[0];
               const summaryBody = 
                 "# Maven 4 Compatibility Testing Summary\n\n" +
                 "Testing with Maven version: " + mavenVersion + "\n" +
                 "Last updated: " + new Date().toISOString() + "\n\n" +
-                (existingSummary ? processTableUpdate(existingSummary.body) : 
-                  '|Project|Status|Details|\n|---|---|---|' + `\n|${repo}|${status}|[Details](${issueUrl})|`);
-
-              // Use GraphQL mutation with clientMutationId for optimistic locking
+                (existingSummary ? processTableUpdate(existingSummary.body, firstErrorLine) : 
+                  '|Project|Status|Details|\n|---|---|---|' + `\n|${repo}|${status}|[Details](${issueUrl})|First Error Line: ${firstErrorLine}|`);
+            
               const clientMutationId = `maven4-summary-${Date.now()}`;
 
               try {
