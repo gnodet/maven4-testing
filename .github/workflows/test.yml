@@ -186,26 +186,48 @@ jobs:
             
               // Process table update with first error line
               function processTableUpdate(currentBody, firstErrorLine) {
-                const tableHeader = '|Project|Status|Details|Error|\n|---|---|---|---|';
-                const entry = `|${repo}|${status}|[Details](${issueUrl})|${firstErrorLine}`;
-            
+                const tableHeader = '|Project|Status|Details|Error|';
+                const headerSeparator = '|---|---|---|---|';
+                const newEntry = `|${repo}|${status}|[Details](${issueUrl})|${firstErrorLine}|`;
+              
+                // Split the body into lines
                 const lines = currentBody.split('\n');
+                
+                // Find the table in the content
                 const tableStartIndex = lines.findIndex(line => line.startsWith('|Project|'));
-                const tableEndIndex = lines.findIndex((line, index) => index > tableStartIndex && line.trim() === '');
-            
-                // Keep only the table header and sorted rows
-                const tableRows = lines.slice(tableStartIndex, tableEndIndex);
-                const allRows = [...tableRows, entry];
-                const sortedRows = allRows.sort((a, b) => {
-                  const aFirstColumn = a.split('|')[1].trim();
-                  const bFirstColumn = b.split('|')[1].trim();
-                  return aFirstColumn.localeCompare(bFirstColumn);
+                if (tableStartIndex === -1) {
+                  // If no table exists, create a new one
+                  return `${tableHeader}\n${headerSeparator}\n${newEntry}`;
+                }
+              
+                // Get existing table rows (excluding header and separator)
+                const tableRows = lines
+                  .slice(tableStartIndex + 2) // Skip header and separator
+                  .filter(line => line.trim() && line.startsWith('|')) // Only keep non-empty table rows
+                  .map(line => {
+                    // Ensure all rows end with | if they don't already
+                    return line.endsWith('|') ? line : line + '|';
+                  });
+              
+                // Extract project name from the new entry
+                const newProjectName = repo;
+              
+                // Filter out any existing entries for the same project
+                const filteredRows = tableRows.filter(row => {
+                  const projectName = row.split('|')[1].trim();
+                  return projectName !== newProjectName;
                 });
-            
-                return [
-                  tableHeader,
-                  ...sortedRows
-                ].join('\n');
+              
+                // Add the new entry and sort all rows
+                const allRows = [...filteredRows, newEntry];
+                const sortedRows = allRows.sort((a, b) => {
+                  const aProject = a.split('|')[1].trim();
+                  const bProject = b.split('|')[1].trim();
+                  return aProject.localeCompare(bProject);
+                });
+              
+                // Reconstruct the table with header
+                return `${tableHeader}\n${headerSeparator}\n${sortedRows.join('\n')}`;
               }
             
               const firstErrorLine = extractFirstErrorLine(buildError);
