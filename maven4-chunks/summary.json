@@ -1,7 +1,7 @@
 {
-  "total_repos": 1086,
-  "num_chunks": 6,
-  "max_chunk_size": 200,
+  "total_repos": 966,
+  "num_chunks": 10,
+  "max_chunk_size": 100,
   "chunks": [
     "chunk-1"
 ,    "chunk-2"
@@ -9,5 +9,9 @@
 ,    "chunk-4"
 ,    "chunk-5"
 ,    "chunk-6"
+,    "chunk-7"
+,    "chunk-8"
+,    "chunk-9"
+,    "chunk-10"
   ]
 }

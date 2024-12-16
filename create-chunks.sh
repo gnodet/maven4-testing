@@ -6,27 +6,32 @@ if [ -z "$1" ] || [ -z "$2" ]; then
     exit 1
 fi
 
+# Create chunks directory
+CHUNKS_DIR="maven4-chunks"
+mkdir -p "$CHUNKS_DIR"
+
 TOKEN="$1"
 MAX_CHUNK_SIZE="$2"
 CURSOR="null"
 HAS_NEXT_PAGE="true"
-TEMP_REPOS_FILE=$(mktemp)
+TEMP_REPOS_FILE=$CHUNKS_DIR/temp-repos.txt
+rm -f "$TEMP_REPOS_FILE"
 
-echo "Fetching Apache Maven repositories..."
+echo "Fetching non-archived Apache Maven repositories..."
 PAGE=1
 
 # First phase: gather all Maven repositories
 while [ "$HAS_NEXT_PAGE" = "true" ]; do
     echo "Fetching page $PAGE..."
-    
+
     if [ "$CURSOR" = "null" ]; then
         CURSOR_PART="null"
     else
         CURSOR_CLEAN=$(echo "$CURSOR" | sed 's/"//g')
         CURSOR_PART="\\\"$CURSOR_CLEAN\\\""
     fi
-    
-    QUERY="{\"query\": \"query { organization(login: \\\"apache\\\") { repositories(first: 100, after: $CURSOR_PART) { pageInfo { hasNextPage endCursor } nodes { name primaryLanguage { name } defaultBranchRef { name target { ... on Commit { file(path: \\\"pom.xml\\\") { name } } } } } } } }\"}"
+
+    QUERY="{\"query\": \"query { organization(login: \\\"apache\\\") { repositories(first: 100, after: $CURSOR_PART) { pageInfo { hasNextPage endCursor } nodes { name isArchived primaryLanguage { name } defaultBranchRef { name target { ... on Commit { file(path: \\\"pom.xml\\\") { name } } } } } } } }\"}"
 
     RESPONSE=$(curl -s -H "Authorization: bearer $TOKEN" \
                     -H "Content-Type: application/json" \
@@ -34,9 +39,10 @@ while [ "$HAS_NEXT_PAGE" = "true" ]; do
                     -d "$QUERY" \
                     https://api.github.com/graphql)
 
-    # Extract Maven repositories and append to temp file
-    echo "$RESPONSE" | jq -r '.data.organization.repositories.nodes[] | 
-      select(.primaryLanguage != null) | 
+    # Extract non-archived Maven repositories and append to temp file
+    echo "$RESPONSE" | jq -r '.data.organization.repositories.nodes[] |
+      select(.isArchived == false) |
+      select(.primaryLanguage != null) |
       select(.primaryLanguage.name | test("Java|Kotlin|Scala")) |
       select(.defaultBranchRef.target.file != null) |
       .name' >> "$TEMP_REPOS_FILE"
@@ -44,7 +50,7 @@ while [ "$HAS_NEXT_PAGE" = "true" ]; do
     # Update pagination info
     HAS_NEXT_PAGE=$(echo "$RESPONSE" | jq -r '.data.organization.repositories.pageInfo.hasNextPage')
     END_CURSOR=$(echo "$RESPONSE" | jq -r '.data.organization.repositories.pageInfo.endCursor')
-    
+
     if [ "$HAS_NEXT_PAGE" = "true" ] && [ "$END_CURSOR" != "null" ]; then
         CURSOR="$END_CURSOR"
         PAGE=$((PAGE + 1))
@@ -58,15 +64,11 @@ sort "$TEMP_REPOS_FILE" -o "$TEMP_REPOS_FILE"
 
 # Count total repositories
 TOTAL_REPOS=$(wc -l < "$TEMP_REPOS_FILE" | tr -d ' ')
-echo "Found $TOTAL_REPOS Maven repositories"
+echo "Found $TOTAL_REPOS non-archived Maven repositories"
 
 # Calculate number of chunks needed
 NUM_CHUNKS=$(( (TOTAL_REPOS + MAX_CHUNK_SIZE - 1) / MAX_CHUNK_SIZE ))
 echo "Creating $NUM_CHUNKS chunks of maximum $MAX_CHUNK_SIZE repositories each"
-
-# Create chunks directory
-CHUNKS_DIR="maven4-chunks"
-mkdir -p "$CHUNKS_DIR"
 
 # Generate chunks as JSON files
 chunk_num=1
@@ -123,4 +125,4 @@ echo "Generated $NUM_CHUNKS chunks in $CHUNKS_DIR/"
 echo "Summary file created at $CHUNKS_DIR/summary.json"
 
 # Cleanup
-rm -f "$TEMP_REPOS_FILE"
+#rm -f "$TEMP_REPOS_FILE"
