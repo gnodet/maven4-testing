@@ -176,6 +176,22 @@ jobs:
               return { issueNumber, status };
             }
 
+            function extractFirstErrorLine(buildError) {
+              const lines = buildError.split('\n');
+              for (let i = lines.length - 1; i >= 0; i--) {
+                const line = lines[i];
+                if (line.startsWith('[ERROR]')) {
+                  // Check the next line to ensure it's not another [ERROR]
+                  if (i < lines.length - 1 && !lines[i + 1].startsWith('[ERROR]')) {
+                    return line;
+                  } else if (i === 0) { // Handle the case where the last error line has no subsequent non-error line
+                    return line;
+                  }
+                }
+              }
+              return 'No error details available';
+            }
+
             async function updateSummaryTable(github, context, repo, status, issueNumber, buildError, mavenVersion) {
               const summaryTitle = `Maven 4 Compatibility Summary (${mavenVersion})`;
               const summaryIssues = await github.rest.issues.listForRepo({
@@ -212,7 +228,7 @@ jobs:
                 ].join('\n');
               }
             
-              const firstErrorLine = buildError.split('\n')[0];
+              const firstErrorLine = extractFirstErrorLine(buildError);
               const summaryBody = 
                 "# Maven 4 Compatibility Testing Summary\n\n" +
                 "Testing with Maven version: " + mavenVersion + "\n" +
