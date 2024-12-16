@@ -257,7 +257,7 @@ jobs:
               }
             }
 
-            module.exports = async ({ github, context }) => {
+            (async () => {
               const { buildSuccess, mavenOutput, buildError } = await runMavenBuild();
               const repo = '${{ matrix.repository }}';
               const mavenVersion = '${{ github.event.inputs.maven_version }}';
@@ -270,4 +270,4 @@ jobs:
 
               // Update summary table
               await updateSummaryTable(github, context, repo, status, issueNumber, mavenVersion);
-            };
+            })();
