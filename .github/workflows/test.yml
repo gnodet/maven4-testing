@@ -115,6 +115,7 @@ jobs:
             const repo = '${{ matrix.repository }}';
             const mavenVersion = '${{ github.event.inputs.maven_version }}';
             const issueTitle = `Maven 4 Test Results: ${repo} (${mavenVersion})`;
+            const chunkNumber = '${{ github.event.inputs.chunk_number }}';
             
             // Create/update individual project issue first to get its number
             const issues = await github.rest.issues.listForRepo({
@@ -133,7 +134,7 @@ jobs:
               `- **Status**: ${status}\n` +
               `- **Maven Version**: ${mavenVersion}\n` +
               `- **Test Date**: ${new Date().toISOString()}\n` +
-              `- **Chunk**: ${github.event.inputs.chunk_number}\n\n` +
+              `- **Chunk**: ${chunkNumber}\n\n` +
               "<details>\n" +
               "<summary>Maven Version Info</summary>\n\n" +
               "```\n" +
