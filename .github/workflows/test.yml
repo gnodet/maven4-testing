@@ -10,7 +10,7 @@ on:
       maven_version:
         description: 'Maven 4 version to test'
         required: true
-        default: '4.0.0-rc-1'
+        default: '4.0.0-rc-2'
       chunk_number:
         description: 'Chunk number to test (or ALL for all chunks)'
         required: true
