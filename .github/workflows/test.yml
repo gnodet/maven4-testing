@@ -2,7 +2,8 @@ name: Maven 4 Compatibility Testing
 
 permissions:
   contents: read
-  issues: write    # Add this to allow creating issues
+  issues: write
+  actions: write    # Needed to trigger workflows
 
 on:
   workflow_dispatch:
@@ -10,49 +11,46 @@ on:
       maven_version:
         description: 'Maven 4 version to test'
         required: true
-        default: '4.0.0-rc-2'
+        default: '4.0.0-rc-3'
       chunk_number:
         description: 'Chunk number to test (or ALL for all chunks)'
         required: true
         default: 'ALL'
 
 jobs:
-  prepare:
+  trigger-chunks:
+    if: github.event.inputs.chunk_number == 'ALL'
     runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Trigger workflows for each chunk
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NUM_CHUNKS=$(jq -r '.num_chunks' maven4-chunks/summary.json)
+          for i in $(seq 1 $NUM_CHUNKS); do
+            echo "Triggering workflow for chunk $i"
+            gh workflow run test.yml \
+              -f maven_version='${{ github.event.inputs.maven_version }}' \
+              -f chunk_number=$i
+          done
+
+  test-maven4:
+    if: github.event.inputs.chunk_number != 'ALL'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJson(steps.set-matrix.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
       
       - name: Load chunk configuration
         id: set-matrix
         run: |
-          if [[ "${{ github.event.inputs.chunk_number }}" == "ALL" ]]; then
-            # For ALL, combine all chunk files
-            REPOS=()
-            for chunk in maven4-chunks/chunk-*.json; do
-              REPOS+=($(jq -r '.include[].repository' "$chunk"))
-            done
-            JSON=$(printf '{"include":[{"repository":"%s"}' "${REPOS[0]}")
-            for repo in "${REPOS[@]:1}"; do
-              JSON="$JSON,{\"repository\":\"$repo\"}"
-            done
-            JSON="$JSON]}"
-            echo "matrix=$JSON" >> $GITHUB_OUTPUT
-          else
-            # For specific chunk, use it directly
-            echo "matrix=$(cat "maven4-chunks/chunk-${{ github.event.inputs.chunk_number }}.json")" >> $GITHUB_OUTPUT
-          fi
+          echo "matrix=$(cat "maven4-chunks/chunk-${{ github.event.inputs.chunk_number }}.json")" >> $GITHUB_OUTPUT
 
-  test-maven4:
-    needs: prepare
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      max-parallel: 2
-      matrix: ${{fromJson(needs.prepare.outputs.matrix)}}
-    
-    steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
