@@ -36,20 +36,27 @@ jobs:
               -f chunk_number=$i
           done
 
+  prepare-matrix:
+    if: github.event.inputs.chunk_number != 'ALL'
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: set-matrix
+        run: |
+          echo "matrix=$(cat "maven4-chunks/chunk-${{ github.event.inputs.chunk_number }}.json")" >> $GITHUB_OUTPUT
+
   test-maven4:
+    needs: prepare-matrix
     if: github.event.inputs.chunk_number != 'ALL'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       max-parallel: 2
-      matrix: ${{ fromJson(steps.set-matrix.outputs.matrix) }}
+      matrix: ${{ fromJson(needs.prepare-matrix.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Load chunk configuration
-        id: set-matrix
-        run: |
-          echo "matrix=$(cat "maven4-chunks/chunk-${{ github.event.inputs.chunk_number }}.json")" >> $GITHUB_OUTPUT
 
       - name: Checkout repository
         uses: actions/checkout@v4
