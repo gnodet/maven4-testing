@@ -45,11 +45,7 @@ jobs:
       - uses: actions/checkout@v4
       - id: set-matrix
         run: |
-          content=$(cat "maven4-chunks/chunk-${{ github.event.inputs.chunk_number }}.json")
-          content="${content//'%'/'%25'}"
-          content="${content//$'\n'/'%0A'}"
-          content="${content//$'\r'/'%0D'}"
-          echo "matrix=$content" >> $GITHUB_OUTPUT
+          echo "matrix=$(jq -c . "maven4-chunks/chunk-${{ github.event.inputs.chunk_number }}.json")" >> $GITHUB_OUTPUT
 
   test-maven4:
     needs: prepare-matrix
