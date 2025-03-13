@@ -28,9 +28,20 @@ jobs:
         id: set-matrix
         run: |
           if [[ "${{ github.event.inputs.chunk_number }}" == "ALL" ]]; then
-            echo "matrix=$(jq -c . maven4-chunks/summary.json)" >> $GITHUB_OUTPUT
+            # For ALL, combine all chunk files
+            REPOS=()
+            for chunk in maven4-chunks/chunk-*.json; do
+              REPOS+=($(jq -r '.include[].repository' "$chunk"))
+            done
+            JSON=$(printf '{"include":[{"repository":"%s"}' "${REPOS[0]}")
+            for repo in "${REPOS[@]:1}"; do
+              JSON="$JSON,{\"repository\":\"$repo\"}"
+            done
+            JSON="$JSON]}"
+            echo "matrix=$JSON" >> $GITHUB_OUTPUT
           else
-            echo "matrix=$(jq -c . "maven4-chunks/chunk-${{ github.event.inputs.chunk_number }}.json")" >> $GITHUB_OUTPUT
+            # For specific chunk, use it directly
+            echo "matrix=$(cat "maven4-chunks/chunk-${{ github.event.inputs.chunk_number }}.json")" >> $GITHUB_OUTPUT
           fi
 
   test-maven4:
