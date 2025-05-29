@@ -9,11 +9,11 @@ on:
   workflow_dispatch:
     inputs:
       maven_version:
-        description: 'Maven 4 version to test (leave empty if using branch/commit)'
-        required: false
+        description: 'Maven 4 version to use for building (required)'
+        required: true
         default: '4.0.0-rc-3'
       maven_branch_or_commit:
-        description: 'Maven branch or commit to build and test (leave empty if using version)'
+        description: 'Maven branch or commit to build and test (leave empty to test the specified version directly)'
         required: false
         default: ''
       chunk_number:
@@ -79,6 +79,16 @@ jobs:
         run: |
           mkdir -p ~/.m2
 
+          # First, always download and install the specified Maven version
+          echo "Downloading Maven version: ${{ github.event.inputs.maven_version }}"
+          wget https://archive.apache.org/dist/maven/maven-4/${{ github.event.inputs.maven_version }}/binaries/apache-maven-${{ github.event.inputs.maven_version }}-bin.tar.gz \
+            || wget https://dlcdn.apache.org/maven/maven-4/${{ github.event.inputs.maven_version }}/binaries/apache-maven-${{ github.event.inputs.maven_version }}-bin.tar.gz
+          tar xzf apache-maven-${{ github.event.inputs.maven_version }}-bin.tar.gz
+
+          # Set up the downloaded Maven for building
+          BUILD_MAVEN_HOME="$GITHUB_WORKSPACE/apache-maven-${{ github.event.inputs.maven_version }}"
+          BUILD_MAVEN_BIN="$BUILD_MAVEN_HOME/bin"
+
           if [ -n "${{ github.event.inputs.maven_branch_or_commit }}" ]; then
             echo "Building Maven from branch/commit: ${{ github.event.inputs.maven_branch_or_commit }}"
 
@@ -87,9 +97,9 @@ jobs:
             cd maven-source
             git checkout ${{ github.event.inputs.maven_branch_or_commit }}
 
-            # Build Maven without tests
-            echo "Building Maven distribution..."
-            ./mvnw clean package -DskipTests -Dmaven.test.skip=true
+            # Build Maven without tests using the downloaded Maven version
+            echo "Building Maven distribution using Maven ${{ github.event.inputs.maven_version }}..."
+            "$BUILD_MAVEN_BIN/mvn" clean package -DskipTests -Dmaven.test.skip=true
 
             # Find and extract the built distribution
             MAVEN_DIST=$(find apache-maven/target -name "apache-maven-*-bin.tar.gz" | head -1)
@@ -102,7 +112,7 @@ jobs:
             cd ..
             tar xzf maven-source/$MAVEN_DIST
 
-            # Get the extracted directory name
+            # Get the extracted directory name and use the built Maven for testing
             MAVEN_DIR=$(tar -tzf maven-source/$MAVEN_DIST | head -1 | cut -f1 -d"/")
             echo "M2_HOME=$GITHUB_WORKSPACE/$MAVEN_DIR" >> $GITHUB_ENV
             echo "$GITHUB_WORKSPACE/$MAVEN_DIR/bin" >> $GITHUB_PATH
@@ -110,11 +120,9 @@ jobs:
 
           else
             echo "Using pre-built Maven version: ${{ github.event.inputs.maven_version }}"
-            wget https://archive.apache.org/dist/maven/maven-4/${{ github.event.inputs.maven_version }}/binaries/apache-maven-${{ github.event.inputs.maven_version }}-bin.tar.gz \
-              || wget https://dlcdn.apache.org/maven/maven-4/${{ github.event.inputs.maven_version }}/binaries/apache-maven-${{ github.event.inputs.maven_version }}-bin.tar.gz
-            tar xzf apache-maven-${{ github.event.inputs.maven_version }}-bin.tar.gz
-            echo "M2_HOME=$GITHUB_WORKSPACE/apache-maven-${{ github.event.inputs.maven_version }}" >> $GITHUB_ENV
-            echo "$GITHUB_WORKSPACE/apache-maven-${{ github.event.inputs.maven_version }}/bin" >> $GITHUB_PATH
+            # Use the downloaded Maven version directly for testing
+            echo "M2_HOME=$BUILD_MAVEN_HOME" >> $GITHUB_ENV
+            echo "$BUILD_MAVEN_BIN" >> $GITHUB_PATH
             echo "MAVEN_DIST_DIR=apache-maven-${{ github.event.inputs.maven_version }}" >> $GITHUB_ENV
           fi
 
@@ -174,7 +182,7 @@ jobs:
 
             async function createOrUpdateIndividualProjectIssue(github, context, repo, buildSuccess, mavenOutput, buildError, mvnupOutput, mavenVersion, mavenBranchOrCommit, chunkNumber) {
               const status = buildSuccess ? '✅ Success' : '❌ Failed';
-              const mavenIdentifier = mavenBranchOrCommit || mavenVersion;
+              const mavenIdentifier = mavenBranchOrCommit ? `${mavenBranchOrCommit} (built with ${mavenVersion})` : mavenVersion;
               const issueTitle = `Maven 4 Test Results: ${repo} (${mavenIdentifier})`;
 
               const issues = await github.rest.issues.listForRepo({
@@ -191,9 +199,9 @@ jobs:
                 "# Maven 4 Compatibility Test Report\n\n" +
                 `- **Repository**: ${repo}\n` +
                 `- **Status**: ${status}\n` +
+                `- **Maven Version**: ${mavenVersion}\n` +
                 (mavenBranchOrCommit ?
-                  `- **Maven Branch/Commit**: ${mavenBranchOrCommit}\n` :
-                  `- **Maven Version**: ${mavenVersion}\n`) +
+                  `- **Maven Branch/Commit**: ${mavenBranchOrCommit} (built with Maven ${mavenVersion})\n` : '') +
                 `- **Test Date**: ${new Date().toISOString()}\n` +
                 `- **Chunk**: ${chunkNumber}\n\n` +
                 "<details>\n" +
@@ -269,7 +277,7 @@ jobs:
             }
 
             async function updateSummaryTable(github, context, repo, status, issueNumber, buildError, mavenVersion, mavenBranchOrCommit) {
-              const mavenIdentifier = mavenBranchOrCommit || mavenVersion;
+              const mavenIdentifier = mavenBranchOrCommit ? `${mavenBranchOrCommit} (built with ${mavenVersion})` : mavenVersion;
               const summaryTitle = `Maven 4 Compatibility Summary (${mavenIdentifier})`;
               const summaryIssues = await github.rest.issues.listForRepo({
                 owner: context.repo.owner,
@@ -330,9 +338,9 @@ jobs:
               const firstErrorLine = extractFirstErrorLine(buildError);
               const summaryBody =
                 "# Maven 4 Compatibility Testing Summary\n\n" +
+                "Testing with Maven version: " + mavenVersion + "\n" +
                 (mavenBranchOrCommit ?
-                  "Testing with Maven branch/commit: " + mavenBranchOrCommit + "\n" :
-                  "Testing with Maven version: " + mavenVersion + "\n") +
+                  "Building from branch/commit: " + mavenBranchOrCommit + "\n" : '') +
                 "Last updated: " + new Date().toISOString() + "\n\n" +
                 (existingSummary ? processTableUpdate(existingSummary.body, firstErrorLine) :
                   '|Project|Status|Details|Error|\n|---|---|---|---|' + `\n|${repo}|${status}|[Details](${issueUrl})|${firstErrorLine}|`);
