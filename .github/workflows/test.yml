@@ -442,6 +442,11 @@ jobs:
                 const headerSeparator = '|---|---|---|---|';
                 const newEntry = `|${repo}|${status}|[Details](${issueUrl})|${firstErrorLine}|`;
 
+                // Handle null or undefined currentBody
+                if (!currentBody) {
+                  return `${tableHeader}\n${headerSeparator}\n${newEntry}`;
+                }
+
                 // Split the body into lines
                 const lines = currentBody.split('\n');
 
