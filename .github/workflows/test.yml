@@ -539,6 +539,10 @@ jobs:
                 github, context, repo, buildSuccess, mavenOutput, buildError, mvnupOutput, mavenVersion, mavenBranchOrCommit, chunkNumber
               );
 
+              // Add delay to prevent GitHub rate limiting (2.5 seconds)
+              console.log('Adding delay to prevent rate limiting...');
+              await new Promise(resolve => setTimeout(resolve, 2500));
+
               // Update summary table
               await updateSummaryTable(github, context, repo, status, issueNumber, buildError, buildSuccess, mavenVersion, mavenBranchOrCommit);
             })();
