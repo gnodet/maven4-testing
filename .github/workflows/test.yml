@@ -42,6 +42,63 @@ jobs:
               -f chunk_number=$i
           done
 
+  build-maven:
+    if: github.event.inputs.maven_branch_or_commit != '' && github.event.inputs.chunk_number != 'ALL'
+    runs-on: ubuntu-latest
+    outputs:
+      maven_artifact_name: ${{ steps.build-info.outputs.maven_artifact_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Build Maven from branch/commit
+        id: build-info
+        run: |
+          mkdir -p ~/.m2
+
+          # Download bootstrap Maven
+          echo "Downloading bootstrap Maven version: ${{ github.event.inputs.maven_version }}"
+          wget https://archive.apache.org/dist/maven/maven-4/${{ github.event.inputs.maven_version }}/binaries/apache-maven-${{ github.event.inputs.maven_version }}-bin.tar.gz \
+            || wget https://dlcdn.apache.org/maven/maven-4/${{ github.event.inputs.maven_version }}/binaries/apache-maven-${{ github.event.inputs.maven_version }}-bin.tar.gz
+          tar xzf apache-maven-${{ github.event.inputs.maven_version }}-bin.tar.gz
+
+          BUILD_MAVEN_BIN="$GITHUB_WORKSPACE/apache-maven-${{ github.event.inputs.maven_version }}/bin"
+
+          # Clone and build Maven from specified branch/commit
+          echo "Building Maven from branch/commit: ${{ github.event.inputs.maven_branch_or_commit }}"
+          git clone https://github.com/apache/maven.git maven-source
+          cd maven-source
+          git checkout ${{ github.event.inputs.maven_branch_or_commit }}
+
+          # Build Maven without tests
+          echo "Building Maven distribution using bootstrap Maven ${{ github.event.inputs.maven_version }}..."
+          "$BUILD_MAVEN_BIN/mvn" clean package -DskipTests -Dmaven.test.skip=true
+
+          # Find the built distribution
+          MAVEN_DIST=$(find apache-maven/target -name "apache-maven-*-bin.tar.gz" | head -1)
+          if [ -z "$MAVEN_DIST" ]; then
+            echo "Error: Could not find Maven distribution in apache-maven/target/"
+            exit 1
+          fi
+
+          echo "Found Maven distribution: $MAVEN_DIST"
+
+          # Create artifact name based on branch/commit and timestamp
+          ARTIFACT_NAME="maven-built-$(echo '${{ github.event.inputs.maven_branch_or_commit }}' | sed 's/[^a-zA-Z0-9-]/-/g')-$(date +%Y%m%d-%H%M%S)"
+          echo "maven_artifact_name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
+
+      - name: Upload built Maven distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.build-info.outputs.maven_artifact_name }}
+          path: maven-source/apache-maven/target/apache-maven-*-bin.tar.gz
+          retention-days: 1
+
   prepare-matrix:
     if: github.event.inputs.chunk_number != 'ALL'
     runs-on: ubuntu-latest
@@ -54,8 +111,8 @@ jobs:
           echo "matrix=$(jq -c . "maven4-chunks/chunk-${{ github.event.inputs.chunk_number }}.json")" >> $GITHUB_OUTPUT
 
   test-maven4:
-    needs: prepare-matrix
-    if: github.event.inputs.chunk_number != 'ALL'
+    needs: [build-maven, prepare-matrix]
+    if: github.event.inputs.chunk_number != 'ALL' && always()
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -172,41 +229,12 @@ jobs:
           java-version: ${{ steps.detect-jdk.outputs.jdk-version }}
           distribution: 'temurin'
 
-      - name: Build Maven from branch/commit
+      - name: Download built Maven artifact
         if: github.event.inputs.maven_branch_or_commit != ''
-        run: |
-          echo "Building Maven from branch/commit: ${{ github.event.inputs.maven_branch_or_commit }}"
-          mkdir -p ~/.m2
-
-          # Download bootstrap Maven
-          echo "Downloading bootstrap Maven version: ${{ github.event.inputs.maven_version }}"
-          wget https://archive.apache.org/dist/maven/maven-4/${{ github.event.inputs.maven_version }}/binaries/apache-maven-${{ github.event.inputs.maven_version }}-bin.tar.gz \
-            || wget https://dlcdn.apache.org/maven/maven-4/${{ github.event.inputs.maven_version }}/binaries/apache-maven-${{ github.event.inputs.maven_version }}-bin.tar.gz
-          tar xzf apache-maven-${{ github.event.inputs.maven_version }}-bin.tar.gz
-
-          BUILD_MAVEN_BIN="$GITHUB_WORKSPACE/apache-maven-${{ github.event.inputs.maven_version }}/bin"
-
-          # Clone and build Maven from specified branch/commit
-          git clone https://github.com/apache/maven.git maven-source
-          cd maven-source
-          git checkout ${{ github.event.inputs.maven_branch_or_commit }}
-
-          # Build Maven without tests
-          echo "Building Maven distribution using bootstrap Maven ${{ github.event.inputs.maven_version }}..."
-          "$BUILD_MAVEN_BIN/mvn" clean package -DskipTests -Dmaven.test.skip=true
-
-          # Find the built distribution
-          MAVEN_DIST=$(find apache-maven/target -name "apache-maven-*-bin.tar.gz" | head -1)
-          if [ -z "$MAVEN_DIST" ]; then
-            echo "Error: Could not find Maven distribution in apache-maven/target/"
-            exit 1
-          fi
-
-          echo "Found Maven distribution: $MAVEN_DIST"
-
-          # Copy the distribution to maven-artifacts directory
-          mkdir -p maven-artifacts
-          cp "$MAVEN_DIST" maven-artifacts/
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build-maven.outputs.maven_artifact_name }}
+          path: maven-artifacts
 
       - name: Setup Maven 4
         run: |
