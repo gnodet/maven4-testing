@@ -269,7 +269,7 @@ jobs:
               if (mvnupOutput && mvnupOutput.trim()) {
                 body +=
                   "<details>\n" +
-                  "<summary>mvnup apply Output</summary>\n\n" +
+                  "<summary>Maven Upgrade Output</summary>\n\n" +
                   "```\n" +
                   mvnupOutput + "\n" +
                   "```\n" +
@@ -314,7 +314,10 @@ jobs:
               return { issueNumber, status };
             }
 
-            function extractFirstErrorLine(buildError) {
+            function extractFirstErrorLine(buildError, buildSuccess) {
+              if (buildSuccess) {
+                return '';
+              }
               const lines = buildError.split('\n');
               for (let i = lines.length - 1; i >= 0; i--) {
                 const line = lines[i];
@@ -330,7 +333,7 @@ jobs:
               return 'No error details available';
             }
 
-            async function updateSummaryTable(github, context, repo, status, issueNumber, buildError, mavenVersion, mavenBranchOrCommit) {
+            async function updateSummaryTable(github, context, repo, status, issueNumber, buildError, buildSuccess, mavenVersion, mavenBranchOrCommit) {
               const mavenIdentifier = mavenBranchOrCommit ? `${mavenBranchOrCommit} (built with ${mavenVersion})` : mavenVersion;
               const summaryTitle = `Maven 4 Compatibility Summary (${mavenIdentifier})`;
               const summaryIssues = await github.rest.issues.listForRepo({
@@ -389,7 +392,7 @@ jobs:
                 return `${tableHeader}\n${headerSeparator}\n${sortedRows.join('\n')}`;
               }
 
-              const firstErrorLine = extractFirstErrorLine(buildError);
+              const firstErrorLine = extractFirstErrorLine(buildError, buildSuccess);
               const summaryBody =
                 "# Maven 4 Compatibility Testing Summary\n\n" +
                 "Testing with Maven version: " + mavenVersion + "\n" +
@@ -447,5 +450,5 @@ jobs:
               );
 
               // Update summary table
-              await updateSummaryTable(github, context, repo, status, issueNumber, buildError, mavenVersion, mavenBranchOrCommit);
+              await updateSummaryTable(github, context, repo, status, issueNumber, buildError, buildSuccess, mavenVersion, mavenBranchOrCommit);
             })();
