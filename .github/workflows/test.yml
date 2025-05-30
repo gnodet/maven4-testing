@@ -20,10 +20,14 @@ on:
         description: 'Chunk number to test (or ALL for all chunks)'
         required: true
         default: 'ALL'
+      maven_artifact_name:
+        description: 'Maven artifact name to download (used internally by triggered workflows)'
+        required: false
+        default: ''
 
 jobs:
   build-maven:
-    if: github.event.inputs.maven_branch_or_commit != ''
+    if: github.event.inputs.maven_branch_or_commit != '' && github.event.inputs.chunk_number == 'ALL'
     runs-on: ubuntu-latest
     outputs:
       maven-artifact-name: ${{ steps.build-info.outputs.maven-artifact-name }}
@@ -95,12 +99,24 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           NUM_CHUNKS=$(jq -r '.num_chunks' maven4-chunks/summary.json)
+          MAVEN_ARTIFACT_NAME="${{ needs.build-maven.outputs.maven-artifact-name }}"
+
           for i in $(seq 1 $NUM_CHUNKS); do
             echo "Triggering workflow for chunk $i"
-            gh workflow run test.yml \
-              -f maven_version='${{ github.event.inputs.maven_version }}' \
-              -f maven_branch_or_commit='${{ github.event.inputs.maven_branch_or_commit }}' \
-              -f chunk_number=$i
+            if [ -n "${{ github.event.inputs.maven_branch_or_commit }}" ]; then
+              # Pass the artifact name when using a branch/commit
+              gh workflow run test.yml \
+                -f maven_version='${{ github.event.inputs.maven_version }}' \
+                -f maven_branch_or_commit='${{ github.event.inputs.maven_branch_or_commit }}' \
+                -f chunk_number=$i \
+                -f maven_artifact_name="$MAVEN_ARTIFACT_NAME"
+            else
+              # No artifact needed when using a released version
+              gh workflow run test.yml \
+                -f maven_version='${{ github.event.inputs.maven_version }}' \
+                -f maven_branch_or_commit='${{ github.event.inputs.maven_branch_or_commit }}' \
+                -f chunk_number=$i
+            fi
           done
 
   prepare-matrix:
@@ -109,12 +125,20 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
-      maven-artifact-name: ${{ needs.build-maven.outputs.maven-artifact-name }}
+      maven-artifact-name: ${{ steps.determine-artifact.outputs.maven-artifact-name }}
     steps:
       - uses: actions/checkout@v4
       - id: set-matrix
         run: |
           echo "matrix=$(jq -c . "maven4-chunks/chunk-${{ github.event.inputs.chunk_number }}.json")" >> $GITHUB_OUTPUT
+      - id: determine-artifact
+        run: |
+          # Use artifact name from input if provided (triggered workflow), otherwise from build-maven job
+          if [ -n "${{ github.event.inputs.maven_artifact_name }}" ]; then
+            echo "maven-artifact-name=${{ github.event.inputs.maven_artifact_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "maven-artifact-name=${{ needs.build-maven.outputs.maven-artifact-name }}" >> $GITHUB_OUTPUT
+          fi
 
   test-maven4:
     needs: prepare-matrix
@@ -141,10 +165,49 @@ jobs:
 
       - name: Download built Maven artifact
         if: github.event.inputs.maven_branch_or_commit != ''
+        continue-on-error: true
+        id: download-artifact
         uses: actions/download-artifact@v4
         with:
           name: ${{ needs.prepare-matrix.outputs.maven-artifact-name }}
           path: maven-artifacts
+
+      - name: Build Maven if artifact not available
+        if: github.event.inputs.maven_branch_or_commit != '' && steps.download-artifact.outcome == 'failure'
+        run: |
+          echo "Maven artifact not found, building Maven from branch/commit..."
+          mkdir -p ~/.m2
+
+          # Download bootstrap Maven
+          echo "Downloading bootstrap Maven version: ${{ github.event.inputs.maven_version }}"
+          wget https://archive.apache.org/dist/maven/maven-4/${{ github.event.inputs.maven_version }}/binaries/apache-maven-${{ github.event.inputs.maven_version }}-bin.tar.gz \
+            || wget https://dlcdn.apache.org/maven/maven-4/${{ github.event.inputs.maven_version }}/binaries/apache-maven-${{ github.event.inputs.maven_version }}-bin.tar.gz
+          tar xzf apache-maven-${{ github.event.inputs.maven_version }}-bin.tar.gz
+
+          BUILD_MAVEN_BIN="$GITHUB_WORKSPACE/apache-maven-${{ github.event.inputs.maven_version }}/bin"
+
+          # Clone and build Maven from specified branch/commit
+          echo "Building Maven from branch/commit: ${{ github.event.inputs.maven_branch_or_commit }}"
+          git clone https://github.com/apache/maven.git maven-source
+          cd maven-source
+          git checkout ${{ github.event.inputs.maven_branch_or_commit }}
+
+          # Build Maven without tests
+          echo "Building Maven distribution using bootstrap Maven ${{ github.event.inputs.maven_version }}..."
+          "$BUILD_MAVEN_BIN/mvn" clean package -DskipTests -Dmaven.test.skip=true
+
+          # Find the built distribution
+          MAVEN_DIST=$(find apache-maven/target -name "apache-maven-*-bin.tar.gz" | head -1)
+          if [ -z "$MAVEN_DIST" ]; then
+            echo "Error: Could not find Maven distribution in apache-maven/target/"
+            exit 1
+          fi
+
+          echo "Found Maven distribution: $MAVEN_DIST"
+
+          # Copy the distribution to maven-artifacts directory
+          mkdir -p maven-artifacts
+          cp "$MAVEN_DIST" maven-artifacts/
 
       - name: Setup Maven 4
         run: |
