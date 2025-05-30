@@ -30,7 +30,7 @@ jobs:
     if: github.event.inputs.maven_branch_or_commit != '' && github.event.inputs.chunk_number == 'ALL'
     runs-on: ubuntu-latest
     outputs:
-      maven-artifact-name: ${{ steps.build-info.outputs.maven-artifact-name }}
+      maven_artifact_name: ${{ steps.build-info.outputs.maven_artifact_name }}
     steps:
       - uses: actions/checkout@v4
 
@@ -74,7 +74,7 @@ jobs:
 
           # Create artifact name based on branch/commit and timestamp
           ARTIFACT_NAME="maven-built-$(echo '${{ github.event.inputs.maven_branch_or_commit }}' | sed 's/[^a-zA-Z0-9-]/-/g')-$(date +%Y%m%d-%H%M%S)"
-          echo "maven-artifact-name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
+          echo "maven_artifact_name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
 
           # Copy the distribution to a known location for upload
           mkdir -p built-maven
@@ -83,7 +83,7 @@ jobs:
       - name: Upload built Maven distribution
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.build-info.outputs.maven-artifact-name }}
+          name: ${{ steps.build-info.outputs.maven_artifact_name }}
           path: maven-source/apache-maven/target/apache-maven-*-bin.tar.gz
           retention-days: 1
 
@@ -99,7 +99,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           NUM_CHUNKS=$(jq -r '.num_chunks' maven4-chunks/summary.json)
-          MAVEN_ARTIFACT_NAME="${{ needs.build-maven.outputs.maven-artifact-name }}"
+          MAVEN_ARTIFACT_NAME="${{ needs.build-maven.outputs.maven_artifact_name }}"
 
           for i in $(seq 1 $NUM_CHUNKS); do
             echo "Triggering workflow for chunk $i"
@@ -124,7 +124,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
-      maven-artifact-name: ${{ steps.determine-artifact.outputs.maven-artifact-name }}
+      maven_artifact_name: ${{ steps.determine-artifact.outputs.maven_artifact_name }}
     steps:
       - uses: actions/checkout@v4
       - id: set-matrix
@@ -134,9 +134,9 @@ jobs:
         run: |
           # Use artifact name from input if provided (triggered workflow), otherwise empty for released versions
           if [ -n "${{ github.event.inputs.maven_artifact_name }}" ]; then
-            echo "maven-artifact-name=${{ github.event.inputs.maven_artifact_name }}" >> $GITHUB_OUTPUT
+            echo "maven_artifact_name=${{ github.event.inputs.maven_artifact_name }}" >> $GITHUB_OUTPUT
           else
-            echo "maven-artifact-name=" >> $GITHUB_OUTPUT
+            echo "maven_artifact_name=" >> $GITHUB_OUTPUT
           fi
 
   test-maven4:
@@ -168,7 +168,7 @@ jobs:
         id: download-artifact
         uses: actions/download-artifact@v4
         with:
-          name: ${{ needs.prepare-matrix.outputs.maven-artifact-name }}
+          name: ${{ needs.prepare-matrix.outputs.maven_artifact_name }}
           path: maven-artifacts
 
       - name: Check if Maven artifact is available
