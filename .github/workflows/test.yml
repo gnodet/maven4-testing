@@ -163,7 +163,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Download built Maven artifact
-        if: github.event.inputs.maven_branch_or_commit != ''
+        if: github.event.inputs.maven_branch_or_commit != '' && github.event.inputs.maven_artifact_name != ''
         continue-on-error: true
         id: download-artifact
         uses: actions/download-artifact@v4
@@ -171,10 +171,22 @@ jobs:
           name: ${{ needs.prepare-matrix.outputs.maven-artifact-name }}
           path: maven-artifacts
 
-      - name: Build Maven if artifact not available
-        if: github.event.inputs.maven_branch_or_commit != '' && steps.download-artifact.outcome == 'failure'
+      - name: Check if Maven artifact is available
+        if: github.event.inputs.maven_branch_or_commit != ''
+        id: check-artifact
         run: |
-          echo "Maven artifact not found, building Maven from branch/commit..."
+          if [ -d "maven-artifacts" ] && [ "$(find maven-artifacts -name "apache-maven-*-bin.tar.gz" | wc -l)" -gt 0 ]; then
+            echo "artifact-available=true" >> $GITHUB_OUTPUT
+            echo "Maven artifact found and available"
+          else
+            echo "artifact-available=false" >> $GITHUB_OUTPUT
+            echo "Maven artifact not available, will build from source"
+          fi
+
+      - name: Build Maven from branch/commit
+        if: github.event.inputs.maven_branch_or_commit != '' && steps.check-artifact.outputs.artifact-available == 'false'
+        run: |
+          echo "Building Maven from branch/commit: ${{ github.event.inputs.maven_branch_or_commit }}"
           mkdir -p ~/.m2
 
           # Download bootstrap Maven
@@ -186,7 +198,6 @@ jobs:
           BUILD_MAVEN_BIN="$GITHUB_WORKSPACE/apache-maven-${{ github.event.inputs.maven_version }}/bin"
 
           # Clone and build Maven from specified branch/commit
-          echo "Building Maven from branch/commit: ${{ github.event.inputs.maven_branch_or_commit }}"
           git clone https://github.com/apache/maven.git maven-source
           cd maven-source
           git checkout ${{ github.event.inputs.maven_branch_or_commit }}
