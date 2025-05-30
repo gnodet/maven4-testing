@@ -120,8 +120,7 @@ jobs:
           done
 
   prepare-matrix:
-    needs: [build-maven]
-    if: github.event.inputs.chunk_number != 'ALL' && always()
+    if: github.event.inputs.chunk_number != 'ALL'
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -133,11 +132,11 @@ jobs:
           echo "matrix=$(jq -c . "maven4-chunks/chunk-${{ github.event.inputs.chunk_number }}.json")" >> $GITHUB_OUTPUT
       - id: determine-artifact
         run: |
-          # Use artifact name from input if provided (triggered workflow), otherwise from build-maven job
+          # Use artifact name from input if provided (triggered workflow), otherwise empty for released versions
           if [ -n "${{ github.event.inputs.maven_artifact_name }}" ]; then
             echo "maven-artifact-name=${{ github.event.inputs.maven_artifact_name }}" >> $GITHUB_OUTPUT
           else
-            echo "maven-artifact-name=${{ needs.build-maven.outputs.maven-artifact-name }}" >> $GITHUB_OUTPUT
+            echo "maven-artifact-name=" >> $GITHUB_OUTPUT
           fi
 
   test-maven4:
