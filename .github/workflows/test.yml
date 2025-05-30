@@ -86,13 +86,13 @@ jobs:
               return
             fi
 
-            echo "Checking $pom_file for JDK requirements..."
+            echo "Checking $pom_file for JDK requirements..." >&2
 
             # Look for requireJavaVersion in enforcer plugin
             ENFORCER_JAVA=$(grep -A 30 "maven-enforcer-plugin" "$pom_file" | grep -A 10 "requireJavaVersion" | grep -oE '[0-9]+(\.[0-9]+)*' | sort -V | tail -1 || true)
 
             if [ -n "$ENFORCER_JAVA" ]; then
-              echo "Found enforcer requireJavaVersion: $ENFORCER_JAVA"
+              echo "Found enforcer requireJavaVersion: $ENFORCER_JAVA" >&2
               if [ "$ENFORCER_JAVA" -ge "21" ]; then
                 current_jdk="21"
               elif [ "$ENFORCER_JAVA" -ge "17" ]; then
@@ -110,17 +110,17 @@ jobs:
 
             if [ -n "$COMPILER_SOURCE" ] && [ "$COMPILER_SOURCE" -gt "17" ]; then
               current_jdk="21"
-              echo "Found maven.compiler.source=$COMPILER_SOURCE -> JDK $current_jdk"
+              echo "Found maven.compiler.source=$COMPILER_SOURCE -> JDK $current_jdk" >&2
             elif [ -n "$COMPILER_TARGET" ] && [ "$COMPILER_TARGET" -gt "17" ]; then
               current_jdk="21"
-              echo "Found maven.compiler.target=$COMPILER_TARGET -> JDK $current_jdk"
+              echo "Found maven.compiler.target=$COMPILER_TARGET -> JDK $current_jdk" >&2
             fi
 
             # Check for java.version property
             JAVA_VERSION_PROP=$(grep -oE '<java\.version>[^<]+' "$pom_file" | grep -oE '[0-9]+' | tail -1 || true)
             if [ -n "$JAVA_VERSION_PROP" ] && [ "$JAVA_VERSION_PROP" -gt "17" ]; then
               current_jdk="21"
-              echo "Found java.version=$JAVA_VERSION_PROP -> JDK $current_jdk"
+              echo "Found java.version=$JAVA_VERSION_PROP -> JDK $current_jdk" >&2
             fi
 
             echo "$current_jdk"
@@ -136,17 +136,17 @@ jobs:
             PARENT_VERSION=$(grep -A 5 "<parent>" "$pom_file" | grep "<version>" | sed 's/.*<version>\(.*\)<\/version>.*/\1/' || true)
 
             if [ -n "$PARENT_GROUP" ] && [ -n "$PARENT_ARTIFACT" ] && [ -n "$PARENT_VERSION" ]; then
-              echo "Found parent: $PARENT_GROUP:$PARENT_ARTIFACT:$PARENT_VERSION"
+              echo "Found parent: $PARENT_GROUP:$PARENT_ARTIFACT:$PARENT_VERSION" >&2
 
               # Try to download parent POM from Maven Central
               PARENT_URL="https://repo1.maven.org/maven2/$(echo $PARENT_GROUP | tr '.' '/')/$PARENT_ARTIFACT/$PARENT_VERSION/$PARENT_ARTIFACT-$PARENT_VERSION.pom"
-              echo "Downloading parent POM from: $PARENT_URL"
+              echo "Downloading parent POM from: $PARENT_URL" >&2
 
               if curl -s -f "$PARENT_URL" -o "parent-pom.xml"; then
-                echo "Successfully downloaded parent POM"
+                echo "Successfully downloaded parent POM" >&2
                 return 0
               else
-                echo "Failed to download parent POM"
+                echo "Failed to download parent POM" >&2
                 return 1
               fi
             fi
