@@ -393,8 +393,10 @@ jobs:
               });
 
               const maxLength = 30000; // Reduced to accommodate both Maven 3.x and 4.x logs
-              const truncatedMaven3Log = maven3Error.length > maxLength ? '...' + maven3Error.slice(-maxLength) : maven3Error;
-              const truncatedMaven4Log = buildError.length > maxLength ? '...' + buildError.slice(-maxLength) : buildError;
+              const safeMaven3Error = maven3Error ? String(maven3Error) : '';
+              const safeBuildError = buildError ? String(buildError) : '';
+              const truncatedMaven3Log = safeMaven3Error.length > maxLength ? '...' + safeMaven3Error.slice(-maxLength) : safeMaven3Error;
+              const truncatedMaven4Log = safeBuildError.length > maxLength ? '...' + safeBuildError.slice(-maxLength) : safeBuildError;
 
               // Get last commit info
               let lastCommitInfo = '';
@@ -511,9 +513,16 @@ jobs:
             }
 
             function extractFirstErrorLine(buildError, buildSuccess, maven3Error, maven3Success) {
+              // Ensure error variables are strings
+              const safeMaven3Error = maven3Error ? String(maven3Error) : '';
+              const safeBuildError = buildError ? String(buildError) : '';
+
               // If Maven 3.x failed, extract error from Maven 3.x
               if (!maven3Success) {
-                const lines = maven3Error.split('\n');
+                if (!safeMaven3Error) {
+                  return 'Maven 3.x: Build failed (no error details)';
+                }
+                const lines = safeMaven3Error.split('\n');
                 for (let i = lines.length - 1; i >= 0; i--) {
                   const line = lines[i];
                   if (line.startsWith('[ERROR]')) {
@@ -530,7 +539,10 @@ jobs:
 
               // If Maven 3.x succeeded but Maven 4.x failed
               if (maven3Success && !buildSuccess) {
-                const lines = buildError.split('\n');
+                if (!safeBuildError) {
+                  return 'Maven 4.x: Build failed (no error details)';
+                }
+                const lines = safeBuildError.split('\n');
                 for (let i = lines.length - 1; i >= 0; i--) {
                   const line = lines[i];
                   if (line.startsWith('[ERROR]')) {
