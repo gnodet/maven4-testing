@@ -28,6 +28,70 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Initialize summary page
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summaryData = JSON.parse(fs.readFileSync('maven4-chunks/summary.json', 'utf8'));
+            const totalProjects = summaryData.total_repos;
+
+            const mavenVersion = '${{ github.event.inputs.maven_version }}';
+            const mavenBranchOrCommit = '${{ github.event.inputs.maven_branch_or_commit }}';
+            const mavenIdentifier = mavenBranchOrCommit ? `${mavenBranchOrCommit} (built with ${mavenVersion})` : mavenVersion;
+            const summaryTitle = `Maven Compatibility Summary (${mavenIdentifier})`;
+            const startDate = new Date().toISOString();
+
+            // Check if summary already exists
+            const summaryIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'all',
+              labels: 'maven4-summary'
+            });
+
+            const existingSummary = summaryIssues.data.find(issue => issue.title === summaryTitle);
+
+            const summaryBody =
+              "# Maven Compatibility Testing Summary\n\n" +
+              "Testing with Maven 3.x first, then Maven 4.x if 3.x succeeds\n" +
+              "Maven 4.x version: " + mavenVersion + "\n" +
+              (mavenBranchOrCommit ?
+                "Building from branch/commit: " + mavenBranchOrCommit + "\n" : '') +
+              "Started: " + startDate + "\n" +
+              "Last updated: " + startDate + "\n\n" +
+              "## Summary Statistics\n\n" +
+              `- **Total Projects**: ${totalProjects}\n` +
+              `- **Tested Projects**: 0 (0.0%)\n` +
+              `- **✅ Successful**: 0 (0.0%)\n` +
+              `- **⚠️ Maven 3.x Failed**: 0 (0.0%)\n` +
+              `- **❌ Maven 4.x Failed**: 0 (0.0%)\n\n` +
+              "## Detailed Results\n\n" +
+              "|Project|Status|Details|Error|\n" +
+              "|---|---|---|---|\n" +
+              "*Testing in progress...*";
+
+            if (existingSummary) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingSummary.number,
+                body: summaryBody,
+                state: 'open',
+                labels: ['maven4-summary']
+              });
+              console.log(`Updated existing summary issue #${existingSummary.number}`);
+            } else {
+              const newIssue = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: summaryTitle,
+                body: summaryBody,
+                labels: ['maven4-summary']
+              });
+              console.log(`Created new summary issue #${newIssue.data.number}`);
+            }
+
       - name: Trigger workflows for each chunk
         env:
           GH_TOKEN: ${{ github.token }}
@@ -626,15 +690,108 @@ jobs:
               }
 
               const firstErrorLine = extractFirstErrorLine(buildError, buildSuccess, maven3Error, maven3Success);
+
+              // Extract total projects and start date from existing summary
+              function extractSummaryInfo(existingBody) {
+                if (!existingBody) {
+                  return { totalProjects: 966, startDate: null }; // Default fallback
+                }
+
+                const totalMatch = existingBody.match(/\*\*Total Projects\*\*:\s*(\d+)/);
+                const startMatch = existingBody.match(/Started:\s*([^\n]+)/);
+
+                return {
+                  totalProjects: totalMatch ? parseInt(totalMatch[1]) : 966,
+                  startDate: startMatch ? startMatch[1] : null
+                };
+              }
+
+              // Calculate statistics from the updated table
+              function calculateStatistics(tableBody, totalProjects) {
+                const lines = tableBody.split('\n');
+                const tableStartIndex = lines.findIndex(line => line.startsWith('|Project|'));
+
+                if (tableStartIndex === -1) {
+                  // No table exists yet, this is the first entry
+                  const success = status === '✅ Success' ? 1 : 0;
+                  const maven3Failed = status === '⚠️ Maven 3.x Failed' ? 1 : 0;
+                  const maven4Failed = status === '❌ Maven 4.x Failed' ? 1 : 0;
+                  const tested = 1;
+
+                  return {
+                    total: totalProjects,
+                    tested: tested,
+                    success: success,
+                    maven3Failed: maven3Failed,
+                    maven4Failed: maven4Failed,
+                    testedRatio: (tested / totalProjects * 100).toFixed(1),
+                    successRatio: tested > 0 ? (success / tested * 100).toFixed(1) : '0.0',
+                    maven3FailedRatio: tested > 0 ? (maven3Failed / tested * 100).toFixed(1) : '0.0',
+                    maven4FailedRatio: tested > 0 ? (maven4Failed / tested * 100).toFixed(1) : '0.0'
+                  };
+                }
+
+                // Get existing table rows (excluding header and separator)
+                const tableRows = lines
+                  .slice(tableStartIndex + 2) // Skip header and separator
+                  .filter(line => line.trim() && line.startsWith('|') && !line.includes('*Testing in progress*')) // Only keep non-empty table rows, exclude progress message
+                  .map(line => line.endsWith('|') ? line : line + '|');
+
+                let success = 0;
+                let maven3Failed = 0;
+                let maven4Failed = 0;
+
+                tableRows.forEach(row => {
+                  const columns = row.split('|');
+                  if (columns.length >= 3) {
+                    const rowStatus = columns[2].trim();
+                    if (rowStatus === '✅ Success') {
+                      success++;
+                    } else if (rowStatus === '⚠️ Maven 3.x Failed') {
+                      maven3Failed++;
+                    } else if (rowStatus === '❌ Maven 4.x Failed') {
+                      maven4Failed++;
+                    }
+                  }
+                });
+
+                const tested = success + maven3Failed + maven4Failed;
+
+                return {
+                  total: totalProjects,
+                  tested: tested,
+                  success: success,
+                  maven3Failed: maven3Failed,
+                  maven4Failed: maven4Failed,
+                  testedRatio: (tested / totalProjects * 100).toFixed(1),
+                  successRatio: tested > 0 ? (success / tested * 100).toFixed(1) : '0.0',
+                  maven3FailedRatio: tested > 0 ? (maven3Failed / tested * 100).toFixed(1) : '0.0',
+                  maven4FailedRatio: tested > 0 ? (maven4Failed / tested * 100).toFixed(1) : '0.0'
+                };
+              }
+
+              const updatedTable = existingSummary ? processTableUpdate(existingSummary.body, firstErrorLine) :
+                '|Project|Status|Details|Error|\n|---|---|---|---|' + `\n|${repo}|${status}|[Details](${issueUrl})|${firstErrorLine}|`;
+
+              const summaryInfo = extractSummaryInfo(existingSummary ? existingSummary.body : null);
+              const stats = calculateStatistics(updatedTable, summaryInfo.totalProjects);
+
               const summaryBody =
                 "# Maven Compatibility Testing Summary\n\n" +
                 "Testing with Maven 3.x first, then Maven 4.x if 3.x succeeds\n" +
                 "Maven 4.x version: " + mavenVersion + "\n" +
                 (mavenBranchOrCommit ?
                   "Building from branch/commit: " + mavenBranchOrCommit + "\n" : '') +
+                (summaryInfo.startDate ? "Started: " + summaryInfo.startDate + "\n" : '') +
                 "Last updated: " + new Date().toISOString() + "\n\n" +
-                (existingSummary ? processTableUpdate(existingSummary.body, firstErrorLine) :
-                  '|Project|Status|Details|Error|\n|---|---|---|---|' + `\n|${repo}|${status}|[Details](${issueUrl})|${firstErrorLine}|`);
+                "## Summary Statistics\n\n" +
+                `- **Total Projects**: ${stats.total}\n` +
+                `- **Tested Projects**: ${stats.tested} (${stats.testedRatio}%)\n` +
+                `- **✅ Successful**: ${stats.success} (${stats.successRatio}%)\n` +
+                `- **⚠️ Maven 3.x Failed**: ${stats.maven3Failed} (${stats.maven3FailedRatio}%)\n` +
+                `- **❌ Maven 4.x Failed**: ${stats.maven4Failed} (${stats.maven4FailedRatio}%)\n\n` +
+                "## Detailed Results\n\n" +
+                updatedTable;
 
               const clientMutationId = `maven4-summary-${Date.now()}`;
 
