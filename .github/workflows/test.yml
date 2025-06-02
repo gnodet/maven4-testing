@@ -279,7 +279,54 @@ jobs:
           script: |
             const { execSync } = require('child_process');
 
-            async function runMavenBuild() {
+            async function runMaven3Build() {
+              let maven3Success = false;
+              let maven3Output = '';
+              let maven3Error = '';
+
+              try {
+                console.log('Testing with Maven 3.x first...');
+
+                // Check if project has Maven wrapper
+                let maven3Command = 'mvn';
+                try {
+                  execSync('test -f project/mvnw');
+                  console.log('Found Maven wrapper, checking version...');
+                  const wrapperVersion = execSync('./mvnw -version 2>&1', { encoding: 'utf8', cwd: process.cwd() + '/project' });
+                  if (wrapperVersion.includes('Apache Maven 3.')) {
+                    console.log('Maven wrapper is configured for Maven 3.x, using it');
+                    maven3Command = './mvnw';
+                  } else {
+                    console.log('Maven wrapper is not Maven 3.x, downloading Maven 3.9.9');
+                    // Download Maven 3.9.9
+                    execSync('wget -q https://archive.apache.org/dist/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz');
+                    execSync('tar xzf apache-maven-3.9.9-bin.tar.gz');
+                    maven3Command = `${process.env.GITHUB_WORKSPACE}/apache-maven-3.9.9/bin/mvn`;
+                  }
+                } catch (wrapperError) {
+                  console.log('No Maven wrapper found, downloading Maven 3.9.9');
+                  // Download Maven 3.9.9
+                  execSync('wget -q https://archive.apache.org/dist/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz');
+                  execSync('tar xzf apache-maven-3.9.9-bin.tar.gz');
+                  maven3Command = `${process.env.GITHUB_WORKSPACE}/apache-maven-3.9.9/bin/mvn`;
+                }
+
+                const maven3VersionInfo = execSync(`${maven3Command} -version 2>&1`, { encoding: 'utf8', cwd: process.cwd() + '/project' });
+                console.log('Running Maven 3.x build...');
+                const maven3BuildOutput = execSync(`${maven3Command} -V -B package -DskipTests 2>&1`, { encoding: 'utf8', cwd: process.cwd() + '/project' });
+                maven3Success = true;
+                maven3Output = maven3VersionInfo;
+                maven3Error = maven3BuildOutput;
+              } catch (error) {
+                maven3Success = false;
+                maven3Output = 'Maven 3.x version info not available';
+                maven3Error = error.stdout || error.message;
+              }
+
+              return { maven3Success, maven3Output, maven3Error };
+            }
+
+            async function runMaven4Build() {
               let buildSuccess = false;
               let mavenOutput = '';
               let buildError = '';
@@ -310,7 +357,7 @@ jobs:
                   }
                 }
 
-                console.log('Running Maven build...');
+                console.log('Running Maven 4.x build...');
                 const buildOutput = execSync('mvn -V -B package -DskipTests 2>&1', { encoding: 'utf8', cwd: process.cwd() + '/project' });
                 buildSuccess = true;
                 mavenOutput = versionInfo;
@@ -324,8 +371,17 @@ jobs:
               return { buildSuccess, mavenOutput, buildError, mvnupOutput };
             }
 
-            async function createOrUpdateIndividualProjectIssue(github, context, repo, buildSuccess, mavenOutput, buildError, mvnupOutput, mavenVersion, mavenBranchOrCommit, chunkNumber) {
-              const status = buildSuccess ? '✅ Success' : '❌ Failed';
+            async function createOrUpdateIndividualProjectIssue(github, context, repo, maven3Success, maven3Output, maven3Error, buildSuccess, mavenOutput, buildError, mvnupOutput, mavenVersion, mavenBranchOrCommit, chunkNumber) {
+              // Determine overall status
+              let overallStatus;
+              if (!maven3Success) {
+                overallStatus = '⚠️ Maven 3.x Failed';
+              } else if (buildSuccess) {
+                overallStatus = '✅ Success';
+              } else {
+                overallStatus = '❌ Maven 4.x Failed';
+              }
+
               const mavenIdentifier = mavenBranchOrCommit ? `${mavenBranchOrCommit} (built with ${mavenVersion})` : mavenVersion;
               const issueTitle = `Maven 4 Test Results: ${repo} (${mavenIdentifier})`;
 
@@ -336,49 +392,86 @@ jobs:
                 labels: 'maven4-testing'
               });
 
-              const maxLength = 60000;
-              const truncatedLog = buildError.length > maxLength ? '...' + buildError.slice(-maxLength) : buildError;
+              const maxLength = 30000; // Reduced to accommodate both Maven 3.x and 4.x logs
+              const truncatedMaven3Log = maven3Error.length > maxLength ? '...' + maven3Error.slice(-maxLength) : maven3Error;
+              const truncatedMaven4Log = buildError.length > maxLength ? '...' + buildError.slice(-maxLength) : buildError;
 
               let body =
-                "# Maven 4 Compatibility Test Report\n\n" +
+                "# Maven Compatibility Test Report\n\n" +
                 `- **Repository**: ${repo}\n` +
-                `- **Status**: ${status}\n` +
-                `- **Maven Version**: ${mavenVersion}\n` +
+                `- **Overall Status**: ${overallStatus}\n` +
+                `- **Maven 3.x Status**: ${maven3Success ? '✅ Success' : '⚠️ Failed'}\n` +
+                `- **Maven 4.x Status**: ${maven3Success ? (buildSuccess ? '✅ Success' : '❌ Failed') : '⏭️ Skipped (Maven 3.x failed)'}\n` +
+                `- **Maven 4.x Version**: ${mavenVersion}\n` +
                 (mavenBranchOrCommit ?
                   `- **Maven Branch/Commit**: ${mavenBranchOrCommit} (built with Maven ${mavenVersion})\n` : '') +
                 `- **Test Date**: ${new Date().toISOString()}\n` +
-                `- **Chunk**: ${chunkNumber}\n\n` +
+                `- **Chunk**: ${chunkNumber}\n\n`;
+
+              // Add Maven 3.x results
+              body +=
                 "<details>\n" +
-                "<summary>Maven Version Info</summary>\n\n" +
+                "<summary>Maven 3.x Version Info</summary>\n\n" +
                 "```\n" +
-                mavenOutput + "\n" +
+                maven3Output + "\n" +
                 "```\n" +
                 "</details>\n\n";
 
-              // Add mvnup output section if available
-              if (mvnupOutput && mvnupOutput.trim()) {
+              if (!maven3Success) {
                 body +=
                   "<details>\n" +
-                  "<summary>Maven Upgrade Output</summary>\n\n" +
+                  "<summary>Maven 3.x Build Error Details</summary>\n\n" +
                   "```\n" +
-                  mvnupOutput + "\n" +
+                  truncatedMaven3Log + "\n" +
                   "```\n" +
                   "</details>\n\n";
               }
 
-              // Add build error details if build failed
-              if (!buildSuccess) {
+              // Add Maven 4.x results only if Maven 3.x succeeded
+              if (maven3Success) {
                 body +=
                   "<details>\n" +
-                  "<summary>Build Error Details</summary>\n\n" +
+                  "<summary>Maven 4.x Version Info</summary>\n\n" +
                   "```\n" +
-                  truncatedLog + "\n" +
+                  mavenOutput + "\n" +
                   "```\n" +
-                  "</details>\n";
+                  "</details>\n\n";
+
+                // Add mvnup output section if available
+                if (mvnupOutput && mvnupOutput.trim()) {
+                  body +=
+                    "<details>\n" +
+                    "<summary>Maven Upgrade Output</summary>\n\n" +
+                    "```\n" +
+                    mvnupOutput + "\n" +
+                    "```\n" +
+                    "</details>\n\n";
+                }
+
+                // Add build error details if Maven 4.x build failed
+                if (!buildSuccess) {
+                  body +=
+                    "<details>\n" +
+                    "<summary>Maven 4.x Build Error Details</summary>\n\n" +
+                    "```\n" +
+                    truncatedMaven4Log + "\n" +
+                    "```\n" +
+                    "</details>\n";
+                }
               }
 
               const existingIssue = issues.data.find(issue => issue.title === issueTitle);
               let issueNumber;
+
+              // Determine labels based on results
+              let labels = ['maven4-testing'];
+              if (!maven3Success) {
+                labels.push('maven3-failed');
+              } else if (buildSuccess) {
+                labels.push('success');
+              } else {
+                labels.push('maven4-failed');
+              }
 
               if (existingIssue) {
                 await github.rest.issues.update({
@@ -387,7 +480,7 @@ jobs:
                   issue_number: existingIssue.number,
                   body: body,
                   state: 'open',
-                  labels: ['maven4-testing', buildSuccess ? 'success' : 'failed']
+                  labels: labels
                 });
                 issueNumber = existingIssue.number;
               } else {
@@ -396,36 +489,56 @@ jobs:
                   repo: context.repo.repo,
                   title: issueTitle,
                   body: body,
-                  labels: ['maven4-testing', buildSuccess ? 'success' : 'failed']
+                  labels: labels
                 });
                 issueNumber = newIssue.data.number;
               }
 
-              return { issueNumber, status };
+              return { issueNumber, status: overallStatus };
             }
 
-            function extractFirstErrorLine(buildError, buildSuccess) {
-              if (buildSuccess) {
-                return '';
-              }
-              const lines = buildError.split('\n');
-              for (let i = lines.length - 1; i >= 0; i--) {
-                const line = lines[i];
-                if (line.startsWith('[ERROR]')) {
-                  // Check the next line to ensure it's not another [ERROR]
-                  if (i > 0 && !lines[i - 1].startsWith('[ERROR]')) {
-                    return line;
-                  } else if (i === 0) { // Handle the case where the last error line has no subsequent non-error line
-                    return line;
+            function extractFirstErrorLine(buildError, buildSuccess, maven3Error, maven3Success) {
+              // If Maven 3.x failed, extract error from Maven 3.x
+              if (!maven3Success) {
+                const lines = maven3Error.split('\n');
+                for (let i = lines.length - 1; i >= 0; i--) {
+                  const line = lines[i];
+                  if (line.startsWith('[ERROR]')) {
+                    // Check the next line to ensure it's not another [ERROR]
+                    if (i > 0 && !lines[i - 1].startsWith('[ERROR]')) {
+                      return `Maven 3.x: ${line}`;
+                    } else if (i === 0) { // Handle the case where the last error line has no subsequent non-error line
+                      return `Maven 3.x: ${line}`;
+                    }
                   }
                 }
+                return 'Maven 3.x: Build failed';
               }
-              return 'No error details available';
+
+              // If Maven 3.x succeeded but Maven 4.x failed
+              if (maven3Success && !buildSuccess) {
+                const lines = buildError.split('\n');
+                for (let i = lines.length - 1; i >= 0; i--) {
+                  const line = lines[i];
+                  if (line.startsWith('[ERROR]')) {
+                    // Check the next line to ensure it's not another [ERROR]
+                    if (i > 0 && !lines[i - 1].startsWith('[ERROR]')) {
+                      return `Maven 4.x: ${line}`;
+                    } else if (i === 0) { // Handle the case where the last error line has no subsequent non-error line
+                      return `Maven 4.x: ${line}`;
+                    }
+                  }
+                }
+                return 'Maven 4.x: Build failed';
+              }
+
+              // Both succeeded
+              return '';
             }
 
-            async function updateSummaryTable(github, context, repo, status, issueNumber, buildError, buildSuccess, mavenVersion, mavenBranchOrCommit) {
+            async function updateSummaryTable(github, context, repo, status, issueNumber, buildError, buildSuccess, maven3Error, maven3Success, mavenVersion, mavenBranchOrCommit) {
               const mavenIdentifier = mavenBranchOrCommit ? `${mavenBranchOrCommit} (built with ${mavenVersion})` : mavenVersion;
-              const summaryTitle = `Maven 4 Compatibility Summary (${mavenIdentifier})`;
+              const summaryTitle = `Maven Compatibility Summary (${mavenIdentifier})`;
               const summaryIssues = await github.rest.issues.listForRepo({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -487,10 +600,11 @@ jobs:
                 return `${tableHeader}\n${headerSeparator}\n${sortedRows.join('\n')}`;
               }
 
-              const firstErrorLine = extractFirstErrorLine(buildError, buildSuccess);
+              const firstErrorLine = extractFirstErrorLine(buildError, buildSuccess, maven3Error, maven3Success);
               const summaryBody =
-                "# Maven 4 Compatibility Testing Summary\n\n" +
-                "Testing with Maven version: " + mavenVersion + "\n" +
+                "# Maven Compatibility Testing Summary\n\n" +
+                "Testing with Maven 3.x first, then Maven 4.x if 3.x succeeds\n" +
+                "Maven 4.x version: " + mavenVersion + "\n" +
                 (mavenBranchOrCommit ?
                   "Building from branch/commit: " + mavenBranchOrCommit + "\n" : '') +
                 "Last updated: " + new Date().toISOString() + "\n\n" +
@@ -533,7 +647,26 @@ jobs:
             }
 
             (async () => {
-              const { buildSuccess, mavenOutput, buildError, mvnupOutput } = await runMavenBuild();
+              // First, run Maven 3.x build
+              const { maven3Success, maven3Output, maven3Error } = await runMaven3Build();
+
+              let buildSuccess = false;
+              let mavenOutput = '';
+              let buildError = '';
+              let mvnupOutput = '';
+
+              // Only run Maven 4.x if Maven 3.x succeeded
+              if (maven3Success) {
+                console.log('Maven 3.x build succeeded, proceeding with Maven 4.x...');
+                const maven4Results = await runMaven4Build();
+                buildSuccess = maven4Results.buildSuccess;
+                mavenOutput = maven4Results.mavenOutput;
+                buildError = maven4Results.buildError;
+                mvnupOutput = maven4Results.mvnupOutput;
+              } else {
+                console.log('Maven 3.x build failed, skipping Maven 4.x build');
+              }
+
               const repo = '${{ matrix.repository }}';
               const mavenVersion = '${{ github.event.inputs.maven_version }}';
               const mavenBranchOrCommit = '${{ github.event.inputs.maven_branch_or_commit }}';
@@ -541,7 +674,7 @@ jobs:
 
               // Create/update individual project issue
               const { issueNumber, status } = await createOrUpdateIndividualProjectIssue(
-                github, context, repo, buildSuccess, mavenOutput, buildError, mvnupOutput, mavenVersion, mavenBranchOrCommit, chunkNumber
+                github, context, repo, maven3Success, maven3Output, maven3Error, buildSuccess, mavenOutput, buildError, mvnupOutput, mavenVersion, mavenBranchOrCommit, chunkNumber
               );
 
               // Add delay to prevent GitHub rate limiting (2.5 seconds)
@@ -549,5 +682,5 @@ jobs:
               await new Promise(resolve => setTimeout(resolve, 2500));
 
               // Update summary table
-              await updateSummaryTable(github, context, repo, status, issueNumber, buildError, buildSuccess, mavenVersion, mavenBranchOrCommit);
+              await updateSummaryTable(github, context, repo, status, issueNumber, buildError, buildSuccess, maven3Error, maven3Success, mavenVersion, mavenBranchOrCommit);
             })();
