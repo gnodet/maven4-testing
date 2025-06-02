@@ -410,7 +410,7 @@ jobs:
 
               let body =
                 "# Maven Compatibility Test Report\n\n" +
-                `- **Repository**: ${repo}\n` +
+                `- **Repository**: [${repo}](https://github.com/apache/${repo})\n` +
                 `- **Overall Status**: ${overallStatus}\n` +
                 `- **Maven 3.x Status**: ${maven3Success ? '✅ Success' : '⚠️ Failed'}\n` +
                 `- **Maven 4.x Status**: ${maven3Success ? (buildSuccess ? '✅ Success' : '❌ Failed') : '⏭️ Skipped (Maven 3.x failed)'}\n` +
