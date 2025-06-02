@@ -396,6 +396,18 @@ jobs:
               const truncatedMaven3Log = maven3Error.length > maxLength ? '...' + maven3Error.slice(-maxLength) : maven3Error;
               const truncatedMaven4Log = buildError.length > maxLength ? '...' + buildError.slice(-maxLength) : buildError;
 
+              // Get last commit info
+              let lastCommitInfo = '';
+              try {
+                const commitSha = execSync('git rev-parse HEAD', { encoding: 'utf8', cwd: process.cwd() + '/project' }).trim();
+                const commitDate = execSync('git log -1 --format=%ci', { encoding: 'utf8', cwd: process.cwd() + '/project' }).trim();
+                const shortSha = commitSha.substring(0, 8);
+                lastCommitInfo = `- **Last Commit**: ${shortSha} (${commitDate})\n`;
+              } catch (error) {
+                console.log('Could not retrieve commit info:', error.message);
+                lastCommitInfo = '- **Last Commit**: Not available\n';
+              }
+
               let body =
                 "# Maven Compatibility Test Report\n\n" +
                 `- **Repository**: ${repo}\n` +
@@ -405,6 +417,7 @@ jobs:
                 `- **Maven 4.x Version**: ${mavenVersion}\n` +
                 (mavenBranchOrCommit ?
                   `- **Maven Branch/Commit**: ${mavenBranchOrCommit} (built with Maven ${mavenVersion})\n` : '') +
+                lastCommitInfo +
                 `- **Test Date**: ${new Date().toISOString()}\n` +
                 `- **Chunk**: ${chunkNumber}\n\n`;
 
