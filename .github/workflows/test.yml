@@ -71,6 +71,7 @@ jobs:
               "|---|---|---|---|\n" +
               "*Testing in progress...*";
 
+            // Always update/create the summary to clear previous results
             if (existingSummary) {
               await github.rest.issues.update({
                 owner: context.repo.owner,
@@ -80,7 +81,7 @@ jobs:
                 state: 'open',
                 labels: ['maven4-summary']
               });
-              console.log(`Updated existing summary issue #${existingSummary.number}`);
+              console.log(`Cleared and reset existing summary issue #${existingSummary.number} for new build`);
             } else {
               const newIssue = await github.rest.issues.create({
                 owner: context.repo.owner,
@@ -644,7 +645,7 @@ jobs:
                 const headerSeparator = '|---|---|---|---|';
                 const newEntry = `|${repo}|${status}|[Details](${issueUrl})|${firstErrorLine}|`;
 
-                // Handle null or undefined currentBody
+                // Handle null or undefined currentBody, or freshly cleared summary
                 if (!currentBody) {
                   return `${tableHeader}\n${headerSeparator}\n${newEntry}`;
                 }
