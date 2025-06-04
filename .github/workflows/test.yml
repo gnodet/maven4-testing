@@ -432,14 +432,69 @@ jobs:
 
                 const maven3VersionInfo = execSync(`${maven3Command} -version 2>&1`, { encoding: 'utf8', cwd: process.cwd() + '/project' });
                 console.log('Running Maven 3.x build...');
-                const maven3BuildOutput = execSync(`${maven3Command} -V -B package -DskipTests 2>&1`, { encoding: 'utf8', cwd: process.cwd() + '/project' });
+                // Run Maven build and capture output
+                const maven3BuildOutput = execSync(`${maven3Command} -V -B -e package -DskipTests 2>&1`, {
+                  encoding: 'utf8',
+                  cwd: process.cwd() + '/project',
+                  timeout: 1800000 // 30 minutes timeout
+                });
                 maven3Success = true;
                 maven3Output = maven3VersionInfo;
-                maven3Error = maven3BuildOutput;
+                maven3Error = maven3BuildOutput; // For successful builds, this contains the build log
               } catch (error) {
                 maven3Success = false;
                 maven3Output = 'Maven 3.x version info not available';
-                maven3Error = error.stdout || error.message;
+                // Enhanced error capture - collect all available output
+                let errorOutput = '';
+                let stdoutContent = '';
+                let stderrContent = '';
+
+                // Capture stdout if available
+                if (error.stdout) {
+                  stdoutContent = error.stdout.toString();
+                }
+
+                // Capture stderr if available
+                if (error.stderr) {
+                  stderrContent = error.stderr.toString();
+                }
+
+                // Handle execSync output array format
+                if (error.output && error.output.length > 0) {
+                  const outputs = error.output.filter(o => o);
+                  if (outputs.length > 1) {
+                    stdoutContent = outputs[1] ? outputs[1].toString() : '';
+                    stderrContent = outputs[2] ? outputs[2].toString() : '';
+                  } else if (outputs.length === 1) {
+                    stdoutContent = outputs[0].toString();
+                  }
+                }
+
+                // Combine outputs intelligently
+                if (stderrContent && stdoutContent) {
+                  errorOutput = `STDERR:\n${stderrContent}\n\nSTDOUT:\n${stdoutContent}`;
+                } else if (stderrContent) {
+                  errorOutput = stderrContent;
+                } else if (stdoutContent) {
+                  errorOutput = stdoutContent;
+                } else {
+                  errorOutput = error.message || 'Unknown error occurred';
+                }
+
+                maven3Error = errorOutput;
+                console.log('Maven 3.x build failed. Error details captured:', errorOutput.substring(0, 500) + '...');
+
+                // Analyze the error for better reporting
+                try {
+                  execSync('echo "' + errorOutput.replace(/"/g, '\\"').replace(/\n/g, '\\n') + '" > maven3_build.log');
+                  const errorAnalysis = execSync('bash scripts/analyze-build-errors.sh maven3_build.log summary 2>&1', {
+                    encoding: 'utf8',
+                    timeout: 30000 // 30 seconds timeout
+                  });
+                  console.log('Maven 3.x error analysis:', errorAnalysis);
+                } catch (analysisError) {
+                  console.log('Failed to analyze Maven 3.x error:', analysisError.message);
+                }
               }
 
               return { maven3Success, maven3Output, maven3Error };
@@ -452,8 +507,15 @@ jobs:
               let mvnupOutput = '';
 
               try {
-                execSync('mvn -version > maven_version.txt');
-                const versionInfo = execSync('cat maven_version.txt').toString();
+                // Get Maven version info with better error handling
+                let versionInfo = '';
+                try {
+                  versionInfo = execSync('mvn -version 2>&1', { encoding: 'utf8' });
+                  execSync('echo "' + versionInfo.replace(/"/g, '\\"') + '" > maven_version.txt');
+                } catch (versionError) {
+                  versionInfo = 'Maven version info not available';
+                  console.log('Failed to get Maven version:', versionError.message);
+                }
 
                 // Check for and run mvnup apply if it exists
                 const mavenDistDir = process.env.MAVEN_DIST_DIR || '';
@@ -462,7 +524,11 @@ jobs:
                 try {
                   execSync(`test -f "${mvnupPath}"`);
                   console.log('Found mvnup script, running mvnup apply...');
-                  mvnupOutput = execSync(`"${mvnupPath}" apply 2>&1`, { encoding: 'utf8', cwd: process.cwd() + '/project' });
+                  mvnupOutput = execSync(`"${mvnupPath}" apply 2>&1`, {
+                    encoding: 'utf8',
+                    cwd: process.cwd() + '/project',
+                    timeout: 300000 // 5 minutes timeout for mvnup
+                  });
                   console.log('mvnup apply completed successfully');
                 } catch (mvnupError) {
                   if (mvnupError.code === 1) {
@@ -472,25 +538,95 @@ jobs:
                   } else {
                     // mvnup script exists but failed
                     console.log('mvnup apply failed:', mvnupError.message);
-                    mvnupOutput = `mvnup apply failed:\n${mvnupError.stdout || mvnupError.message}`;
+                    let mvnupErrorOutput = '';
+                    if (mvnupError.stdout) {
+                      mvnupErrorOutput = mvnupError.stdout;
+                    } else if (mvnupError.stderr) {
+                      mvnupErrorOutput = mvnupError.stderr;
+                    } else if (mvnupError.output && mvnupError.output.length > 0) {
+                      mvnupErrorOutput = mvnupError.output.filter(o => o).join('\n');
+                    } else {
+                      mvnupErrorOutput = mvnupError.message || 'Unknown mvnup error';
+                    }
+                    mvnupOutput = `mvnup apply failed:\n${mvnupErrorOutput}`;
                   }
                 }
 
                 console.log('Running Maven 4.x build...');
-                const buildOutput = execSync('mvn -V -B package -DskipTests 2>&1', { encoding: 'utf8', cwd: process.cwd() + '/project' });
+                const buildOutput = execSync('mvn -V -B -e package -DskipTests 2>&1', {
+                  encoding: 'utf8',
+                  cwd: process.cwd() + '/project',
+                  timeout: 1800000 // 30 minutes timeout
+                });
                 buildSuccess = true;
                 mavenOutput = versionInfo;
                 buildError = buildOutput;
               } catch (error) {
                 buildSuccess = false;
-                mavenOutput = execSync('cat maven_version.txt').toString();
-                buildError = error.stdout || error.message;
+                // Try to get version info from file, fallback to error message
+                try {
+                  mavenOutput = execSync('cat maven_version.txt 2>/dev/null || echo "Maven version info not available"').toString();
+                } catch (fileError) {
+                  mavenOutput = 'Maven version info not available';
+                }
+
+                // Enhanced error capture - collect all available output
+                let errorOutput = '';
+                let stdoutContent = '';
+                let stderrContent = '';
+
+                // Capture stdout if available
+                if (error.stdout) {
+                  stdoutContent = error.stdout.toString();
+                }
+
+                // Capture stderr if available
+                if (error.stderr) {
+                  stderrContent = error.stderr.toString();
+                }
+
+                // Handle execSync output array format
+                if (error.output && error.output.length > 0) {
+                  const outputs = error.output.filter(o => o);
+                  if (outputs.length > 1) {
+                    stdoutContent = outputs[1] ? outputs[1].toString() : '';
+                    stderrContent = outputs[2] ? outputs[2].toString() : '';
+                  } else if (outputs.length === 1) {
+                    stdoutContent = outputs[0].toString();
+                  }
+                }
+
+                // Combine outputs intelligently
+                if (stderrContent && stdoutContent) {
+                  errorOutput = `STDERR:\n${stderrContent}\n\nSTDOUT:\n${stdoutContent}`;
+                } else if (stderrContent) {
+                  errorOutput = stderrContent;
+                } else if (stdoutContent) {
+                  errorOutput = stdoutContent;
+                } else {
+                  errorOutput = error.message || 'Unknown error occurred';
+                }
+
+                buildError = errorOutput;
+                console.log('Maven 4.x build failed. Error details captured:', errorOutput.substring(0, 500) + '...');
+
+                // Analyze the error for better reporting
+                try {
+                  execSync('echo "' + errorOutput.replace(/"/g, '\\"').replace(/\n/g, '\\n') + '" > maven4_build.log');
+                  const errorAnalysis = execSync('bash scripts/analyze-build-errors.sh maven4_build.log summary 2>&1', {
+                    encoding: 'utf8',
+                    timeout: 30000 // 30 seconds timeout
+                  });
+                  console.log('Maven 4.x error analysis:', errorAnalysis);
+                } catch (analysisError) {
+                  console.log('Failed to analyze Maven 4.x error:', analysisError.message);
+                }
               }
 
               return { buildSuccess, mavenOutput, buildError, mvnupOutput };
             }
 
-            async function createOrUpdateIndividualProjectIssue(github, context, repo, maven3Success, maven3Output, maven3Error, buildSuccess, mavenOutput, buildError, mvnupOutput, mavenVersion, mavenBranchOrCommit, chunkNumber) {
+            async function createOrUpdateIndividualProjectIssue(github, context, repo, maven3Success, maven3Output, maven3Error, buildSuccess, mavenOutput, buildError, mvnupOutput, mavenVersion, mavenBranchOrCommit, chunkNumber, timingInfo) {
               // Determine overall status
               let overallStatus;
               if (!maven3Success) {
@@ -529,6 +665,25 @@ jobs:
                 lastCommitInfo = '- **Last Commit**: Not available\n';
               }
 
+              // Add build timing and diagnostic information
+              let diagnosticInfo = '';
+              try {
+                const javaVersion = execSync('java -version 2>&1 | head -1', { encoding: 'utf8' }).trim();
+                const osInfo = execSync('uname -a 2>/dev/null || echo "OS info not available"', { encoding: 'utf8' }).trim();
+                diagnosticInfo = `- **Java Version**: ${javaVersion}\n- **OS**: ${osInfo}\n`;
+              } catch (diagError) {
+                diagnosticInfo = '- **Diagnostic Info**: Not available\n';
+              }
+
+              // Add timing information if available
+              if (timingInfo) {
+                diagnosticInfo += `- **Maven 3.x Duration**: ${(timingInfo.maven3Duration / 1000).toFixed(1)}s\n`;
+                if (timingInfo.maven4Duration > 0) {
+                  diagnosticInfo += `- **Maven 4.x Duration**: ${(timingInfo.maven4Duration / 1000).toFixed(1)}s\n`;
+                }
+                diagnosticInfo += `- **Total Duration**: ${(timingInfo.overallDuration / 1000).toFixed(1)}s\n`;
+              }
+
               let body =
                 "# Maven Compatibility Test Report\n\n" +
                 `- **Repository**: [${repo}](https://github.com/apache/${repo})\n` +
@@ -539,6 +694,7 @@ jobs:
                 (mavenBranchOrCommit ?
                   `- **Maven Branch/Commit**: ${mavenBranchOrCommit} (built with Maven ${mavenVersion})\n` : '') +
                 lastCommitInfo +
+                diagnosticInfo +
                 `- **Test Date**: ${new Date().toISOString()}\n` +
                 `- **Chunk**: ${chunkNumber}\n\n`;
 
@@ -552,13 +708,38 @@ jobs:
                 "</details>\n\n";
 
               if (!maven3Success) {
-                body +=
-                  "<details>\n" +
-                  "<summary>Maven 3.x Build Error Details</summary>\n\n" +
-                  "```\n" +
-                  truncatedMaven3Log + "\n" +
-                  "```\n" +
-                  "</details>\n\n";
+                // Check if we have separated stdout/stderr
+                if (safeMaven3Error.includes('STDERR:') && safeMaven3Error.includes('STDOUT:')) {
+                  const parts = safeMaven3Error.split('\n\nSTDOUT:\n');
+                  const stderrPart = parts[0].replace('STDERR:\n', '');
+                  const stdoutPart = parts[1] || '';
+
+                  body +=
+                    "<details>\n" +
+                    "<summary>Maven 3.x Error Output (STDERR)</summary>\n\n" +
+                    "```\n" +
+                    (stderrPart.length > maxLength ? '...' + stderrPart.slice(-maxLength) : stderrPart) + "\n" +
+                    "```\n" +
+                    "</details>\n\n";
+
+                  if (stdoutPart.trim()) {
+                    body +=
+                      "<details>\n" +
+                      "<summary>Maven 3.x Build Output (STDOUT)</summary>\n\n" +
+                      "```\n" +
+                      (stdoutPart.length > maxLength ? '...' + stdoutPart.slice(-maxLength) : stdoutPart) + "\n" +
+                      "```\n" +
+                      "</details>\n\n";
+                  }
+                } else {
+                  body +=
+                    "<details>\n" +
+                    "<summary>Maven 3.x Build Error Details</summary>\n\n" +
+                    "```\n" +
+                    truncatedMaven3Log + "\n" +
+                    "```\n" +
+                    "</details>\n\n";
+                }
               }
 
               // Add Maven 4.x results only if Maven 3.x succeeded
@@ -584,13 +765,38 @@ jobs:
 
                 // Add build error details if Maven 4.x build failed
                 if (!buildSuccess) {
-                  body +=
-                    "<details>\n" +
-                    "<summary>Maven 4.x Build Error Details</summary>\n\n" +
-                    "```\n" +
-                    truncatedMaven4Log + "\n" +
-                    "```\n" +
-                    "</details>\n";
+                  // Check if we have separated stdout/stderr
+                  if (safeBuildError.includes('STDERR:') && safeBuildError.includes('STDOUT:')) {
+                    const parts = safeBuildError.split('\n\nSTDOUT:\n');
+                    const stderrPart = parts[0].replace('STDERR:\n', '');
+                    const stdoutPart = parts[1] || '';
+
+                    body +=
+                      "<details>\n" +
+                      "<summary>Maven 4.x Error Output (STDERR)</summary>\n\n" +
+                      "```\n" +
+                      (stderrPart.length > maxLength ? '...' + stderrPart.slice(-maxLength) : stderrPart) + "\n" +
+                      "```\n" +
+                      "</details>\n\n";
+
+                    if (stdoutPart.trim()) {
+                      body +=
+                        "<details>\n" +
+                        "<summary>Maven 4.x Build Output (STDOUT)</summary>\n\n" +
+                        "```\n" +
+                        (stdoutPart.length > maxLength ? '...' + stdoutPart.slice(-maxLength) : stdoutPart) + "\n" +
+                        "```\n" +
+                        "</details>\n";
+                    }
+                  } else {
+                    body +=
+                      "<details>\n" +
+                      "<summary>Maven 4.x Build Error Details</summary>\n\n" +
+                      "```\n" +
+                      truncatedMaven4Log + "\n" +
+                      "```\n" +
+                      "</details>\n";
+                  }
                 }
               }
 
@@ -898,18 +1104,42 @@ jobs:
             }
 
             (async () => {
+              const overallStartTime = Date.now();
+
+              // Validate build environment first
+              console.log('Validating build environment...');
+              try {
+                const validationOutput = execSync('bash scripts/validate-build-environment.sh project mvn 2>&1', {
+                  encoding: 'utf8',
+                  timeout: 60000 // 1 minute timeout
+                });
+                console.log('Build environment validation completed successfully');
+                console.log('Validation output:', validationOutput.substring(0, 1000) + '...');
+              } catch (validationError) {
+                console.log('Build environment validation failed:', validationError.message);
+                // Continue anyway, but log the issue
+              }
+
               // First, run Maven 3.x build
+              console.log('Starting Maven 3.x build...');
+              const maven3StartTime = Date.now();
               const { maven3Success, maven3Output, maven3Error } = await runMaven3Build();
+              const maven3Duration = Date.now() - maven3StartTime;
+              console.log(`Maven 3.x build completed in ${(maven3Duration / 1000).toFixed(1)}s`);
 
               let buildSuccess = false;
               let mavenOutput = '';
               let buildError = '';
               let mvnupOutput = '';
+              let maven4Duration = 0;
 
               // Only run Maven 4.x if Maven 3.x succeeded
               if (maven3Success) {
                 console.log('Maven 3.x build succeeded, proceeding with Maven 4.x...');
+                const maven4StartTime = Date.now();
                 const maven4Results = await runMaven4Build();
+                maven4Duration = Date.now() - maven4StartTime;
+                console.log(`Maven 4.x build completed in ${(maven4Duration / 1000).toFixed(1)}s`);
                 buildSuccess = maven4Results.buildSuccess;
                 mavenOutput = maven4Results.mavenOutput;
                 buildError = maven4Results.buildError;
@@ -918,15 +1148,24 @@ jobs:
                 console.log('Maven 3.x build failed, skipping Maven 4.x build');
               }
 
+              const overallDuration = Date.now() - overallStartTime;
+              console.log(`Overall test completed in ${(overallDuration / 1000).toFixed(1)}s`);
+
               const repo = '${{ matrix.repository }}';
               const mavenVersion = '${{ github.event.inputs.maven_version }}';
               const mavenBranchOrCommit = '${{ github.event.inputs.maven_branch_or_commit }}';
               const chunkNumber = '${{ github.event.inputs.chunk_number }}';
               const buildId = '${{ github.event.inputs.build_id }}';
 
-              // Create/update individual project issue
+              // Create/update individual project issue with timing information
+              const timingInfo = {
+                maven3Duration: maven3Duration,
+                maven4Duration: maven4Duration,
+                overallDuration: overallDuration
+              };
+
               const { issueNumber, status } = await createOrUpdateIndividualProjectIssue(
-                github, context, repo, maven3Success, maven3Output, maven3Error, buildSuccess, mavenOutput, buildError, mvnupOutput, mavenVersion, mavenBranchOrCommit, chunkNumber
+                github, context, repo, maven3Success, maven3Output, maven3Error, buildSuccess, mavenOutput, buildError, mvnupOutput, mavenVersion, mavenBranchOrCommit, chunkNumber, timingInfo
               );
 
               // Add delay to prevent GitHub rate limiting (2.5 seconds)
