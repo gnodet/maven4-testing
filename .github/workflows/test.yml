@@ -11,7 +11,7 @@ on:
       maven_version:
         description: 'Maven 4 version to use for building (required)'
         required: true
-        default: '4.0.0-rc-3'
+        default: '4.0.0-rc-5'
       maven_branch_or_commit:
         description: 'Maven branch or commit to build and test (leave empty to test the specified version directly)'
         required: false
