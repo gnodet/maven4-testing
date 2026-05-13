@@ -155,7 +155,7 @@ async function runMaven4Build() {
     }
 
     console.log('Running Maven 4.x build...');
-    const buildOutput = execSync('mvn -V -B -e package -DskipTests -Dmaven.repo.local=${HOME}/.m2/repository-m4 2>&1', {
+    const buildOutput = execSync('mvn -V -B -e clean package -DskipTests -Dmaven.repo.local=${HOME}/.m2/repository-m4 2>&1', {
       encoding: 'utf8',
       cwd: process.cwd() + '/project',
       timeout: 2700000 // 45 minutes timeout
