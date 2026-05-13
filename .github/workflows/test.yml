@@ -300,6 +300,12 @@ jobs:
             fi
           fi
 
+          # Maven 4 requires JDK 17+, so enforce minimum
+          if [ "$JDK_VERSION" != "21" ] && [ "$(echo -e "$JDK_VERSION\n17" | sort -V | head -1)" != "17" ]; then
+            echo "JDK $JDK_VERSION detected, but Maven 4 requires 17+. Upgrading to 17."
+            JDK_VERSION="17"
+          fi
+
           echo "Final JDK version: $JDK_VERSION"
           echo "jdk-version=$JDK_VERSION" >> $GITHUB_OUTPUT
 

@@ -38,7 +38,7 @@ async function runMaven3Build() {
     const maven3BuildOutput = execSync(`${maven3Command} -V -B -e package -DskipTests 2>&1`, {
       encoding: 'utf8',
       cwd: process.cwd() + '/project',
-      timeout: 1800000 // 30 minutes timeout
+      timeout: 2700000 // 45 minutes timeout
     });
     maven3Success = true;
     maven3Output = maven3VersionInfo;
@@ -158,7 +158,7 @@ async function runMaven4Build() {
     const buildOutput = execSync('mvn -V -B -e package -DskipTests 2>&1', {
       encoding: 'utf8',
       cwd: process.cwd() + '/project',
-      timeout: 1800000 // 30 minutes timeout
+      timeout: 2700000 // 45 minutes timeout
     });
     buildSuccess = true;
     mavenOutput = versionInfo;
