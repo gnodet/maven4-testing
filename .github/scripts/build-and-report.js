@@ -35,7 +35,7 @@ async function runMaven3Build() {
     const maven3VersionInfo = execSync(`${maven3Command} -version 2>&1`, { encoding: 'utf8', cwd: process.cwd() + '/project' });
     console.log('Running Maven 3.x build...');
     // Run Maven build and capture output
-    const maven3BuildOutput = execSync(`${maven3Command} -V -B -e package -DskipTests 2>&1`, {
+    const maven3BuildOutput = execSync(`${maven3Command} -V -B -e package -DskipTests -Dmaven.repo.local=\${HOME}/.m2/repository-m3 2>&1`, {
       encoding: 'utf8',
       cwd: process.cwd() + '/project',
       timeout: 2700000 // 45 minutes timeout
@@ -155,7 +155,7 @@ async function runMaven4Build() {
     }
 
     console.log('Running Maven 4.x build...');
-    const buildOutput = execSync('mvn -V -B -e package -DskipTests 2>&1', {
+    const buildOutput = execSync('mvn -V -B -e package -DskipTests -Dmaven.repo.local=${HOME}/.m2/repository-m4 2>&1', {
       encoding: 'utf8',
       cwd: process.cwd() + '/project',
       timeout: 2700000 // 45 minutes timeout
