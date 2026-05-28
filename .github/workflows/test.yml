@@ -157,7 +157,7 @@ jobs:
 
           # Build Maven without tests
           echo "Building Maven distribution using bootstrap Maven ${{ github.event.inputs.maven_version }}..."
-          "$BUILD_MAVEN_BIN/mvn" clean package -DskipTests -Dmaven.test.skip=true
+          "$BUILD_MAVEN_BIN/mvn" clean package -DskipTests -Dmaven.test.skip=true -Dspotless.skip=true
 
           # Find the built distribution
           MAVEN_DIST=$(find apache-maven/target -name "apache-maven-*-bin.tar.gz" | head -1)
