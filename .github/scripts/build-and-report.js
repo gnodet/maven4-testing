@@ -1,4 +1,37 @@
 const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+
+function loadKnownIssues() {
+  try {
+    const knownIssuesPath = path.join(process.cwd(), '.github', 'known-issues.json');
+    return JSON.parse(fs.readFileSync(knownIssuesPath, 'utf8'));
+  } catch (error) {
+    console.log('No known-issues.json found or failed to parse:', error.message);
+    return [];
+  }
+}
+
+function matchKnownIssue(repo, buildError) {
+  const knownIssues = loadKnownIssues();
+  const safeBuildError = buildError ? String(buildError) : '';
+
+  for (const issue of knownIssues) {
+    if (issue.projectPatterns && issue.projectPatterns.length > 0) {
+      const projectMatch = issue.projectPatterns.some(pattern => repo.startsWith(pattern));
+      if (!projectMatch) continue;
+    }
+
+    if (issue.errorPatterns && issue.errorPatterns.length > 0) {
+      const allErrorsMatch = issue.errorPatterns.every(pattern => safeBuildError.includes(pattern));
+      if (!allErrorsMatch) continue;
+    }
+
+    return issue;
+  }
+
+  return null;
+}
 
 async function runMaven3Build() {
   let maven3Success = false;
@@ -38,7 +71,7 @@ async function runMaven3Build() {
     const maven3BuildOutput = execSync(`${maven3Command} -V -B -e package -DskipTests -Dmaven.repo.local=\${HOME}/.m2/repository-m3 2>&1`, {
       encoding: 'utf8',
       cwd: process.cwd() + '/project',
-      timeout: 2700000 // 45 minutes timeout
+      timeout: 3600000 // 60 minutes timeout
     });
     maven3Success = true;
     maven3Output = maven3VersionInfo;
@@ -158,7 +191,7 @@ async function runMaven4Build() {
     const buildOutput = execSync('mvn -V -B -e clean package -DskipTests -Dmaven.repo.local=${HOME}/.m2/repository-m4 2>&1', {
       encoding: 'utf8',
       cwd: process.cwd() + '/project',
-      timeout: 2700000 // 45 minutes timeout
+      timeout: 3600000 // 60 minutes timeout
     });
     buildSuccess = true;
     mavenOutput = versionInfo;
@@ -231,12 +264,19 @@ async function runMaven4Build() {
 async function createOrUpdateIndividualProjectIssue(github, context, repo, maven3Success, maven3Output, maven3Error, buildSuccess, mavenOutput, buildError, mvnupOutput, mavenVersion, mavenBranchOrCommit, chunkNumber, timingInfo) {
   // Determine overall status
   let overallStatus;
+  let knownIssue = null;
   if (!maven3Success) {
     overallStatus = '⚠️ Maven 3.x Failed';
   } else if (buildSuccess) {
     overallStatus = '✅ Success';
   } else {
-    overallStatus = '❌ Maven 4.x Failed';
+    knownIssue = matchKnownIssue(repo, buildError);
+    if (knownIssue) {
+      overallStatus = '🔶 Known Issue';
+      console.log(`Matched known issue ${knownIssue.id} for ${repo}`);
+    } else {
+      overallStatus = '❌ Maven 4.x Failed';
+    }
   }
 
   const mavenIdentifier = mavenBranchOrCommit ? `${mavenBranchOrCommit} (built with ${mavenVersion})` : mavenVersion;
@@ -290,6 +330,7 @@ async function createOrUpdateIndividualProjectIssue(github, context, repo, maven
     "# Maven Compatibility Test Report\n\n" +
     `- **Repository**: [${repo}](https://github.com/apache/${repo})\n` +
     `- **Overall Status**: ${overallStatus}\n` +
+    (knownIssue ? `- **Known Issue**: [${knownIssue.id}](${knownIssue.url}) — ${knownIssue.description}\n` : '') +
     `- **Maven 3.x Status**: ${maven3Success ? '✅ Success' : '⚠️ Failed'}\n` +
     `- **Maven 4.x Status**: ${maven3Success ? (buildSuccess ? '✅ Success' : '❌ Failed') : '⏭️ Skipped (Maven 3.x failed)'}\n` +
     `- **Maven 4.x Version**: ${mavenVersion}\n` +
@@ -411,6 +452,8 @@ async function createOrUpdateIndividualProjectIssue(github, context, repo, maven
     labels.push('maven3-failed');
   } else if (buildSuccess) {
     labels.push('success');
+  } else if (knownIssue) {
+    labels.push('known-issue');
   } else {
     labels.push('maven4-failed');
   }
@@ -436,7 +479,7 @@ async function createOrUpdateIndividualProjectIssue(github, context, repo, maven
     issueNumber = newIssue.data.number;
   }
 
-  return { issueNumber, status: overallStatus };
+  return { issueNumber, status: overallStatus, knownIssue };
 }
 
 function extractFirstErrorLine(buildError, buildSuccess, maven3Error, maven3Success) {
@@ -488,7 +531,7 @@ function extractFirstErrorLine(buildError, buildSuccess, maven3Error, maven3Succ
   return '';
 }
 
-async function updateSummaryTable(github, context, repo, status, issueNumber, buildError, buildSuccess, maven3Error, maven3Success, mavenVersion, mavenBranchOrCommit, currentBuildId) {
+async function updateSummaryTable(github, context, repo, status, issueNumber, buildError, buildSuccess, maven3Error, maven3Success, mavenVersion, mavenBranchOrCommit, currentBuildId, knownIssue) {
   const mavenIdentifier = mavenBranchOrCommit ? `${mavenBranchOrCommit} (built with ${mavenVersion})` : mavenVersion;
   const summaryTitle = `Maven Compatibility Summary (${mavenIdentifier})`;
   const summaryIssues = await github.rest.issues.listForRepo({
@@ -565,7 +608,9 @@ async function updateSummaryTable(github, context, repo, status, issueNumber, bu
     return `${tableHeader}\n${headerSeparator}\n${sortedRows.join('\n')}`;
   }
 
-  const firstErrorLine = extractFirstErrorLine(buildError, buildSuccess, maven3Error, maven3Success);
+  const firstErrorLine = knownIssue
+    ? `[${knownIssue.id}](${knownIssue.url})`
+    : extractFirstErrorLine(buildError, buildSuccess, maven3Error, maven3Success);
 
   // Extract total projects and start date from existing summary
   function extractSummaryInfo(existingBody) {
@@ -592,6 +637,7 @@ async function updateSummaryTable(github, context, repo, status, issueNumber, bu
       const success = status === '✅ Success' ? 1 : 0;
       const maven3Failed = status === '⚠️ Maven 3.x Failed' ? 1 : 0;
       const maven4Failed = status === '❌ Maven 4.x Failed' ? 1 : 0;
+      const knownIssueCount = status === '🔶 Known Issue' ? 1 : 0;
       const tested = 1;
 
       return {
@@ -600,10 +646,12 @@ async function updateSummaryTable(github, context, repo, status, issueNumber, bu
         success: success,
         maven3Failed: maven3Failed,
         maven4Failed: maven4Failed,
+        knownIssue: knownIssueCount,
         testedRatio: (tested / totalProjects * 100).toFixed(1),
         successRatio: tested > 0 ? (success / tested * 100).toFixed(1) : '0.0',
         maven3FailedRatio: tested > 0 ? (maven3Failed / tested * 100).toFixed(1) : '0.0',
-        maven4FailedRatio: tested > 0 ? (maven4Failed / tested * 100).toFixed(1) : '0.0'
+        maven4FailedRatio: tested > 0 ? (maven4Failed / tested * 100).toFixed(1) : '0.0',
+        knownIssueRatio: tested > 0 ? (knownIssueCount / tested * 100).toFixed(1) : '0.0'
       };
     }
 
@@ -616,6 +664,7 @@ async function updateSummaryTable(github, context, repo, status, issueNumber, bu
     let success = 0;
     let maven3Failed = 0;
     let maven4Failed = 0;
+    let knownIssueCount = 0;
 
     tableRows.forEach(row => {
       const columns = row.split('|');
@@ -627,11 +676,13 @@ async function updateSummaryTable(github, context, repo, status, issueNumber, bu
           maven3Failed++;
         } else if (rowStatus === '❌ Maven 4.x Failed') {
           maven4Failed++;
+        } else if (rowStatus === '🔶 Known Issue') {
+          knownIssueCount++;
         }
       }
     });
 
-    const tested = success + maven3Failed + maven4Failed;
+    const tested = success + maven3Failed + maven4Failed + knownIssueCount;
 
     return {
       total: totalProjects,
@@ -639,10 +690,12 @@ async function updateSummaryTable(github, context, repo, status, issueNumber, bu
       success: success,
       maven3Failed: maven3Failed,
       maven4Failed: maven4Failed,
+      knownIssue: knownIssueCount,
       testedRatio: (tested / totalProjects * 100).toFixed(1),
       successRatio: tested > 0 ? (success / tested * 100).toFixed(1) : '0.0',
       maven3FailedRatio: tested > 0 ? (maven3Failed / tested * 100).toFixed(1) : '0.0',
-      maven4FailedRatio: tested > 0 ? (maven4Failed / tested * 100).toFixed(1) : '0.0'
+      maven4FailedRatio: tested > 0 ? (maven4Failed / tested * 100).toFixed(1) : '0.0',
+      knownIssueRatio: tested > 0 ? (knownIssueCount / tested * 100).toFixed(1) : '0.0'
     };
   }
 
@@ -666,7 +719,9 @@ async function updateSummaryTable(github, context, repo, status, issueNumber, bu
     `- **Tested Projects**: ${stats.tested} (${stats.testedRatio}%)\n` +
     `- **✅ Successful**: ${stats.success} (${stats.successRatio}%)\n` +
     `- **⚠️ Maven 3.x Failed**: ${stats.maven3Failed} (${stats.maven3FailedRatio}%)\n` +
-    `- **❌ Maven 4.x Failed**: ${stats.maven4Failed} (${stats.maven4FailedRatio}%)\n\n` +
+    `- **❌ Maven 4.x Failed**: ${stats.maven4Failed} (${stats.maven4FailedRatio}%)\n` +
+    (stats.knownIssue > 0 ? `- **🔶 Known Issue**: ${stats.knownIssue} (${stats.knownIssueRatio}%)\n` : '') +
+    '\n' +
     "## Detailed Results\n\n" +
     updatedTable;
 
@@ -767,7 +822,7 @@ module.exports = async function(github, context) {
     overallDuration: overallDuration
   };
 
-  const { issueNumber, status } = await createOrUpdateIndividualProjectIssue(
+  const { issueNumber, status, knownIssue } = await createOrUpdateIndividualProjectIssue(
     github, context, repo, maven3Success, maven3Output, maven3Error, buildSuccess, mavenOutput, buildError, mvnupOutput, mavenVersion, mavenBranchOrCommit, chunkNumber, timingInfo
   );
 
@@ -776,5 +831,5 @@ module.exports = async function(github, context) {
   await new Promise(resolve => setTimeout(resolve, 2500));
 
   // Update summary table
-  await updateSummaryTable(github, context, repo, status, issueNumber, buildError, buildSuccess, maven3Error, maven3Success, mavenVersion, mavenBranchOrCommit, buildId);
+  await updateSummaryTable(github, context, repo, status, issueNumber, buildError, buildSuccess, maven3Error, maven3Success, mavenVersion, mavenBranchOrCommit, buildId, knownIssue);
 };

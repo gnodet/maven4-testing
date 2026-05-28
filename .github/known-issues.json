@@ -1,0 +1,33 @@
+[
+  {
+    "id": "SLING-13220",
+    "description": "Sling parent POM enforcer rules silently broken with enforcer < 3.2.1",
+    "url": "https://issues.apache.org/jira/browse/SLING-13220",
+    "errorPatterns": [
+      "BannedDependencies failed with message"
+    ],
+    "projectPatterns": [
+      "sling-"
+    ]
+  },
+  {
+    "id": "scala-maven-plugin#911",
+    "description": "scala-maven-plugin < 4.9.5 calls add() on immutable lists returned by Maven 4 API",
+    "url": "https://github.com/davidB/scala-maven-plugin/commit/e6d922eb",
+    "errorPatterns": [
+      "scala-maven-plugin",
+      "UnsupportedOperationException"
+    ],
+    "projectPatterns": []
+  },
+  {
+    "id": "beta-plugin-api-break",
+    "description": "Maven plugins at 4.0.0-beta-1 use removed API (ProjectManager methods renamed/removed before RC)",
+    "url": "https://github.com/apache/maven/issues/13666",
+    "errorPatterns": [
+      "4.0.0-beta-1",
+      "NoSuchMethodError"
+    ],
+    "projectPatterns": []
+  }
+]
