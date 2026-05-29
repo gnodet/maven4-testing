@@ -289,7 +289,7 @@ async function createOrUpdateIndividualProjectIssue(github, context, repo, maven
     labels: 'maven4-testing'
   });
 
-  const maxLength = 30000; // Reduced to accommodate both Maven 3.x and 4.x logs
+  const maxLength = 15000; // Keep each log under 15k to stay within GitHub's 65536 char issue body limit
   const safeMaven3Error = maven3Error ? String(maven3Error) : '';
   const safeBuildError = buildError ? String(buildError) : '';
   const truncatedMaven3Log = safeMaven3Error.length > maxLength ? '...' + safeMaven3Error.slice(-maxLength) : safeMaven3Error;
@@ -456,6 +456,11 @@ async function createOrUpdateIndividualProjectIssue(github, context, repo, maven
     labels.push('known-issue');
   } else {
     labels.push('maven4-failed');
+  }
+
+  // GitHub has a 65536 character limit for issue bodies
+  if (body.length > 65000) {
+    body = body.substring(0, 64900) + '\n\n---\n*Issue body truncated due to GitHub size limit*\n';
   }
 
   if (existingIssue) {
@@ -764,18 +769,12 @@ async function updateSummaryTable(github, context, repo, status, issueNumber, bu
 module.exports = async function(github, context) {
   const overallStartTime = Date.now();
 
-  // Validate build environment first
-  console.log('Validating build environment...');
+  // Log available disk space
   try {
-    const validationOutput = execSync('bash scripts/validate-build-environment.sh project mvn 2>&1', {
-      encoding: 'utf8',
-      timeout: 60000 // 1 minute timeout
-    });
-    console.log('Build environment validation completed successfully');
-    console.log('Validation output:', validationOutput.substring(0, 1000) + '...');
-  } catch (validationError) {
-    console.log('Build environment validation failed:', validationError.message);
-    // Continue anyway, but log the issue
+    const diskSpace = execSync('df -h . | tail -1', { encoding: 'utf8' }).trim();
+    console.log('Disk space:', diskSpace);
+  } catch (e) {
+    // ignore
   }
 
   // First, run Maven 3.x build
