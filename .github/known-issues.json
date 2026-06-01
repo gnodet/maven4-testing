@@ -29,5 +29,33 @@
       "NoSuchMethodError"
     ],
     "projectPatterns": []
+  },
+  {
+    "id": "ancient-enforcer-plugin",
+    "description": "maven-enforcer-plugin < 3.0.0 uses removed PluginParameterExpressionEvaluator constructor",
+    "errorPatterns": [
+      "maven-enforcer-plugin",
+      "PluginParameterExpressionEvaluator"
+    ],
+    "projectPatterns": []
+  },
+  {
+    "id": "old-quarkus-servicelocator",
+    "description": "Old Quarkus versions use ServiceLocator pattern removed in Maven 4",
+    "errorPatterns": [
+      "ServiceLocator"
+    ],
+    "projectPatterns": [
+      "camel-kameleon"
+    ]
+  },
+  {
+    "id": "exec-plugin-getcontainer",
+    "description": "exec-maven-plugin < 3.2.0 calls MavenSession.getContainer() which returns null in Maven 4",
+    "errorPatterns": [
+      "exec-maven-plugin",
+      "getContainer"
+    ],
+    "projectPatterns": []
   }
 ]
