@@ -397,11 +397,12 @@ async function createOrUpdateIndividualProjectIssue(github, context, repo, maven
 
     // Add mvnup output section if available
     if (mvnupOutput && mvnupOutput.trim()) {
+      const truncatedMvnupOutput = mvnupOutput.length > maxLength ? '...' + mvnupOutput.slice(-maxLength) : mvnupOutput;
       body +=
         "<details>\n" +
         "<summary>Maven Upgrade Output</summary>\n\n" +
         "```\n" +
-        mvnupOutput + "\n" +
+        truncatedMvnupOutput + "\n" +
         "```\n" +
         "</details>\n\n";
     }
