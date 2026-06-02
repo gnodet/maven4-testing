@@ -289,11 +289,19 @@ async function createOrUpdateIndividualProjectIssue(github, context, repo, maven
     labels: 'maven4-testing'
   });
 
-  const maxLength = 15000; // Keep each log under 15k to stay within GitHub's 65536 char issue body limit
+  const maxLength = 8000; // Keep each log under 8k to stay within GitHub's 65536 char issue body limit
   const safeMaven3Error = maven3Error ? String(maven3Error) : '';
   const safeBuildError = buildError ? String(buildError) : '';
-  const truncatedMaven3Log = safeMaven3Error.length > maxLength ? '...' + safeMaven3Error.slice(-maxLength) : safeMaven3Error;
-  const truncatedMaven4Log = safeBuildError.length > maxLength ? '...' + safeBuildError.slice(-maxLength) : safeBuildError;
+  // Extract ERROR/WARNING lines for a compact error summary
+  const extractErrors = (log) => {
+    const lines = log.split('\n');
+    const errorLines = lines.filter(l => /^\[ERROR\]|^\[WARNING\].*[Ff]ailed|Exception|Caused by/.test(l));
+    return errorLines.length > 0 ? 'Key errors:\n' + errorLines.slice(-30).join('\n') + '\n\n' : '';
+  };
+  const maven3Errors = extractErrors(safeMaven3Error);
+  const maven4Errors = extractErrors(safeBuildError);
+  const truncatedMaven3Log = safeMaven3Error.length > maxLength ? maven3Errors + '...(truncated)...\n' + safeMaven3Error.slice(-maxLength) : safeMaven3Error;
+  const truncatedMaven4Log = safeBuildError.length > maxLength ? maven4Errors + '...(truncated)...\n' + safeBuildError.slice(-maxLength) : safeBuildError;
 
   // Get last commit info
   let lastCommitInfo = '';
