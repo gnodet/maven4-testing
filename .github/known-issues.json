@@ -41,13 +41,11 @@
   },
   {
     "id": "old-quarkus-servicelocator",
-    "description": "Old Quarkus versions use ServiceLocator pattern removed in Maven 4",
+    "description": "Old Quarkus/plugin versions use ServiceLocator pattern removed in Maven 4",
     "errorPatterns": [
       "ServiceLocator"
     ],
-    "projectPatterns": [
-      "camel-kameleon"
-    ]
+    "projectPatterns": []
   },
   {
     "id": "exec-plugin-getcontainer",
@@ -55,6 +53,45 @@
     "errorPatterns": [
       "exec-maven-plugin",
       "getContainer"
+    ],
+    "projectPatterns": []
+  },
+  {
+    "id": "snapshot-dep-unavailable",
+    "description": "Project depends on SNAPSHOT artifacts not available in release repositories",
+    "errorPatterns": [
+      "SNAPSHOT",
+      "could not be resolved"
+    ],
+    "projectPatterns": [
+      "incubator-uniffle"
+    ]
+  },
+  {
+    "id": "commons-release-plugin-scm",
+    "description": "commons-release-plugin clean-staging fails due to SCM configuration issues unrelated to Maven 4",
+    "errorPatterns": [
+      "commons-release-plugin",
+      "Exception while executing SCM command"
+    ],
+    "projectPatterns": []
+  },
+  {
+    "id": "jax-maven-plugin-npe",
+    "description": "jax-maven-plugin 0.1.8 NPE under Maven 4 — plugin unmaintained",
+    "errorPatterns": [
+      "jax-maven-plugin",
+      "NullPointerException"
+    ],
+    "projectPatterns": [
+      "oozie"
+    ]
+  },
+  {
+    "id": "old-compiler-plugin-errorprone",
+    "description": "maven-compiler-plugin < 3.11 cannot find ErrorProne plug-in under Maven 4 classloading",
+    "errorPatterns": [
+      "plug-in not found: ErrorProne"
     ],
     "projectPatterns": []
   }

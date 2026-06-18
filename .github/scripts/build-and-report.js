@@ -713,65 +713,116 @@ async function updateSummaryTable(github, context, repo, status, issueNumber, bu
     };
   }
 
-  const updatedTable = existingSummary ? processTableUpdate(existingSummary.body, firstErrorLine) :
-    '|Project|Status|Details|Error|\n|---|---|---|---|' + `\n|${repo}|${status}|[Details](${issueUrl})|${firstErrorLine}|`;
+  const MAX_RETRIES = 5;
 
-  const summaryInfo = extractSummaryInfo(existingSummary ? existingSummary.body : null);
-  const stats = calculateStatistics(updatedTable, summaryInfo.totalProjects);
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      // Re-read the summary issue on retries to get the latest body
+      let currentSummary = existingSummary;
+      if (attempt > 1) {
+        console.log(`Retry attempt ${attempt}: re-reading summary issue...`);
+        const freshIssues = await github.rest.issues.listForRepo({
+          owner: context.repo.owner,
+          repo: context.repo.repo,
+          state: 'all',
+          labels: 'maven4-summary'
+        });
+        currentSummary = freshIssues.data.find(issue => issue.title === summaryTitle);
 
-  const summaryBody =
-    "# Maven Compatibility Testing Summary\n\n" +
-    "Testing with Maven 3.x first, then Maven 4.x if 3.x succeeds\n" +
-    "Maven 4.x version: " + mavenVersion + "\n" +
-    (mavenBranchOrCommit ?
-      "Building from branch/commit: " + mavenBranchOrCommit + "\n" : '') +
-    (summaryInfo.startDate ? "Started: " + summaryInfo.startDate + "\n" : '') +
-    "Last updated: " + new Date().toISOString() + "\n" +
-    "Build ID: " + currentBuildId + "\n\n" +
-    "## Summary Statistics\n\n" +
-    `- **Total Projects**: ${stats.total}\n` +
-    `- **Tested Projects**: ${stats.tested} (${stats.testedRatio}%)\n` +
-    `- **✅ Successful**: ${stats.success} (${stats.successRatio}%)\n` +
-    `- **⚠️ Maven 3.x Failed**: ${stats.maven3Failed} (${stats.maven3FailedRatio}%)\n` +
-    `- **❌ Maven 4.x Failed**: ${stats.maven4Failed} (${stats.maven4FailedRatio}%)\n` +
-    (stats.knownIssue > 0 ? `- **🔶 Known Issue**: ${stats.knownIssue} (${stats.knownIssueRatio}%)\n` : '') +
-    '\n' +
-    "## Detailed Results\n\n" +
-    updatedTable;
-
-  const clientMutationId = `maven4-summary-${Date.now()}`;
-
-  try {
-    if (existingSummary) {
-      await github.graphql(`
-        mutation UpdateIssue($input: UpdateIssueInput!) {
-          updateIssue(input: $input) {
-            issue {
-              id
-            }
-            clientMutationId
+        // Re-check build ID on retry
+        if (currentSummary && currentSummary.body) {
+          const buildIdMatch = currentSummary.body.match(/Build ID:\s*([^\n]+)/);
+          const summaryBuildId = buildIdMatch ? buildIdMatch[1].trim() : null;
+          if (summaryBuildId && summaryBuildId !== currentBuildId) {
+            console.log(`Build ID mismatch on retry - skipping.`);
+            return;
           }
         }
-      `, {
-        input: {
-          id: existingSummary.node_id,
-          body: summaryBody,
-          clientMutationId: clientMutationId
-        }
-      });
-    } else {
-      await github.rest.issues.create({
+      }
+
+      // Recompute table and stats from latest body
+      const latestTable = currentSummary ? processTableUpdate(currentSummary.body, firstErrorLine) :
+        '|Project|Status|Details|Error|\n|---|---|---|---|' + `\n|${repo}|${status}|[Details](${issueUrl})|${firstErrorLine}|`;
+
+      const latestInfo = extractSummaryInfo(currentSummary ? currentSummary.body : null);
+      const latestStats = calculateStatistics(latestTable, latestInfo.totalProjects);
+
+      const latestBody =
+        "# Maven Compatibility Testing Summary\n\n" +
+        "Testing with Maven 3.x first, then Maven 4.x if 3.x succeeds\n" +
+        "Maven 4.x version: " + mavenVersion + "\n" +
+        (mavenBranchOrCommit ?
+          "Building from branch/commit: " + mavenBranchOrCommit + "\n" : '') +
+        (latestInfo.startDate ? "Started: " + latestInfo.startDate + "\n" : '') +
+        "Last updated: " + new Date().toISOString() + "\n" +
+        "Build ID: " + currentBuildId + "\n\n" +
+        "## Summary Statistics\n\n" +
+        `- **Total Projects**: ${latestStats.total}\n` +
+        `- **Tested Projects**: ${latestStats.tested} (${latestStats.testedRatio}%)\n` +
+        `- **✅ Successful**: ${latestStats.success} (${latestStats.successRatio}%)\n` +
+        `- **⚠️ Maven 3.x Failed**: ${latestStats.maven3Failed} (${latestStats.maven3FailedRatio}%)\n` +
+        `- **❌ Maven 4.x Failed**: ${latestStats.maven4Failed} (${latestStats.maven4FailedRatio}%)\n` +
+        (latestStats.knownIssue > 0 ? `- **🔶 Known Issue**: ${latestStats.knownIssue} (${latestStats.knownIssueRatio}%)\n` : '') +
+        '\n' +
+        "## Detailed Results\n\n" +
+        latestTable;
+
+      if (currentSummary) {
+        await github.graphql(`
+          mutation UpdateIssue($input: UpdateIssueInput!) {
+            updateIssue(input: $input) {
+              issue {
+                id
+              }
+              clientMutationId
+            }
+          }
+        `, {
+          input: {
+            id: currentSummary.node_id,
+            body: latestBody,
+            clientMutationId: `maven4-summary-${Date.now()}`
+          }
+        });
+      } else {
+        await github.rest.issues.create({
+          owner: context.repo.owner,
+          repo: context.repo.repo,
+          title: summaryTitle,
+          body: latestBody,
+          labels: ['maven4-summary']
+        });
+        return; // New issue created, no need to verify
+      }
+
+      // Verify the project row survived (detect concurrent overwrite)
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const verifyIssue = await github.rest.issues.get({
         owner: context.repo.owner,
         repo: context.repo.repo,
-        title: summaryTitle,
-        body: summaryBody,
-        labels: ['maven4-summary']
+        issue_number: currentSummary.number
       });
+
+      if (verifyIssue.data.body && verifyIssue.data.body.includes(`|${repo}|`)) {
+        console.log(`Summary update verified for ${repo} (attempt ${attempt})`);
+        return;
+      }
+
+      console.log(`Summary update for ${repo} was overwritten by concurrent update (attempt ${attempt}/${MAX_RETRIES})`);
+      // Random backoff before retry
+      const backoffMs = Math.floor(Math.random() * 3000) + 1000;
+      await new Promise(resolve => setTimeout(resolve, backoffMs));
+
+    } catch (error) {
+      console.error(`Error updating summary table (attempt ${attempt}/${MAX_RETRIES}):`, error);
+      if (attempt === MAX_RETRIES) {
+        throw error;
+      }
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
-  } catch (error) {
-    console.error('Error updating summary table:', error);
-    throw error;
   }
+
+  console.warn(`Failed to persist summary update for ${repo} after ${MAX_RETRIES} attempts`);
 }
 
 // Main execution function
