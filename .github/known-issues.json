@@ -59,6 +59,7 @@
   {
     "id": "snapshot-dep-unavailable",
     "description": "Project depends on SNAPSHOT artifacts not available in release repositories",
+    "url": "https://github.com/apache/uniffle/issues/2752",
     "errorPatterns": [
       "SNAPSHOT",
       "could not be resolved"
@@ -69,7 +70,7 @@
   },
   {
     "id": "commons-release-plugin-scm",
-    "description": "commons-release-plugin clean-staging fails due to SCM configuration issues unrelated to Maven 4",
+    "description": "commons-release-plugin clean-staging fails under Maven 4 — commons-ognl is dormant",
     "errorPatterns": [
       "commons-release-plugin",
       "Exception while executing SCM command"
@@ -78,7 +79,7 @@
   },
   {
     "id": "jax-maven-plugin-npe",
-    "description": "jax-maven-plugin 0.1.8 NPE under Maven 4 — plugin unmaintained",
+    "description": "jax-maven-plugin 0.1.8 NPE under Maven 4 — plugin unmaintained, oozie is retired",
     "errorPatterns": [
       "jax-maven-plugin",
       "NullPointerException"
@@ -94,5 +95,17 @@
       "plug-in not found: ErrorProne"
     ],
     "projectPatterns": []
+  },
+  {
+    "id": "invalid-hadoop-pom",
+    "description": "hadoop-project 3.2.0-3.2.2 and 3.3.0 have invalid XML (<Xlint:-unchecked/>) causing Non-parseable POM errors in Maven 4, losing transitive deps",
+    "url": "https://github.com/apache/maven/issues/12302",
+    "errorPatterns": [
+      "Non-parseable POM",
+      "hadoop-project"
+    ],
+    "projectPatterns": [
+      "hadoop-api-shim"
+    ]
   }
 ]
