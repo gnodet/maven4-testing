@@ -110,6 +110,15 @@
     ]
   },
   {
+    "id": "jaxb2-plugin-classloading",
+    "description": "jaxb2-maven-plugin 3.x fails under Maven 4 classloading — package-info classes from JAXB runtime not visible in plugin classrealm",
+    "errorPatterns": [
+      "jaxb2-maven-plugin",
+      "ClassNotFoundException"
+    ],
+    "projectPatterns": []
+  },
+  {
     "id": "invalid-hadoop-pom",
     "description": "hadoop-project 3.1.0, 3.2.0-3.2.2 and 3.3.0 have invalid XML (<Xlint:-unchecked/>) causing Non-parseable POM errors in Maven 4, losing transitive deps",
     "url": "https://issues.apache.org/jira/browse/HADOOP-19923",

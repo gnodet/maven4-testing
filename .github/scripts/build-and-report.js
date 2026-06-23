@@ -71,7 +71,8 @@ async function runMaven3Build() {
     const maven3BuildOutput = execSync(`${maven3Command} -V -B -e package -DskipTests -Dmaven.repo.local=\${HOME}/.m2/repository-m3 2>&1`, {
       encoding: 'utf8',
       cwd: process.cwd() + '/project',
-      timeout: 3600000 // 60 minutes timeout
+      timeout: 3600000, // 60 minutes timeout
+      maxBuffer: 50 * 1024 * 1024 // 50 MB
     });
     maven3Success = true;
     maven3Output = maven3VersionInfo;
@@ -162,7 +163,8 @@ async function runMaven4Build() {
       mvnupOutput = execSync(`"${mvnupPath}" apply 2>&1`, {
         encoding: 'utf8',
         cwd: process.cwd() + '/project',
-        timeout: 300000 // 5 minutes timeout for mvnup
+        timeout: 300000, // 5 minutes timeout for mvnup
+        maxBuffer: 50 * 1024 * 1024 // 50 MB
       });
       console.log('mvnup apply completed successfully');
     } catch (mvnupError) {
@@ -191,7 +193,8 @@ async function runMaven4Build() {
     const buildOutput = execSync('mvn -V -B -e clean package -DskipTests -Dmaven.repo.local=${HOME}/.m2/repository-m4 2>&1', {
       encoding: 'utf8',
       cwd: process.cwd() + '/project',
-      timeout: 3600000 // 60 minutes timeout
+      timeout: 3600000, // 60 minutes timeout
+      maxBuffer: 50 * 1024 * 1024 // 50 MB
     });
     buildSuccess = true;
     mavenOutput = versionInfo;
