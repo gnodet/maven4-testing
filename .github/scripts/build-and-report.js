@@ -189,6 +189,36 @@ async function runMaven4Build() {
       }
     }
 
+    // After mvnup modifies POMs, reformat them to avoid false-positive format-check
+    // failures caused by mvnup's POM edits.  The formatter config may live in a parent
+    // POM (e.g. Sling parent) so we can't detect it by grepping the local pom.xml.
+    // Instead, just attempt each formatter — if the plugin isn't configured, Maven
+    // exits quickly with "No plugin found for prefix" which we harmlessly ignore.
+    if (mvnupOutput && mvnupOutput.includes('Modified')) {
+      for (const fmt of [
+        { name: 'spotless', goal: 'spotless:apply' },
+        { name: 'sortpom',  goal: 'sortpom:sort'   }
+      ]) {
+        try {
+          console.log(`Trying ${fmt.name} to reformat POMs after mvnup...`);
+          execSync(`mvn -B ${fmt.goal} -Dmaven.repo.local=\${HOME}/.m2/repository-m4 2>&1`, {
+            encoding: 'utf8',
+            cwd: process.cwd() + '/project',
+            timeout: 120000,
+            maxBuffer: 10 * 1024 * 1024
+          });
+          console.log(`${fmt.name} completed successfully`);
+        } catch (formatError) {
+          const msg = (formatError.stdout || formatError.message || '').toString();
+          if (msg.includes('No plugin found for prefix')) {
+            console.log(`${fmt.name} not configured in this project, skipping`);
+          } else {
+            console.log(`${fmt.name} failed (non-fatal): ${formatError.message}`);
+          }
+        }
+      }
+    }
+
     console.log('Running Maven 4.x build...');
     const buildOutput = execSync('mvn -V -B -e clean package -DskipTests -Dmaven.repo.local=${HOME}/.m2/repository-m4 2>&1', {
       encoding: 'utf8',
