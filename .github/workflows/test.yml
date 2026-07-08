@@ -157,6 +157,10 @@ jobs:
           git clone https://github.com/apache/maven.git maven-source
           cd maven-source
 
+          # Configure git identity for merge commits
+          git config user.email "maven4-testing@github.actions"
+          git config user.name "Maven 4 Testing"
+
           # Split refs by '+' and process each one
           IFS='+' read -ra REFS <<< "$MAVEN_REF"
           if [ ${#REFS[@]} -gt 1 ]; then
