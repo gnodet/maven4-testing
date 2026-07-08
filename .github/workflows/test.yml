@@ -150,10 +150,17 @@ jobs:
           BUILD_MAVEN_BIN="$GITHUB_WORKSPACE/apache-maven-${{ github.event.inputs.maven_version }}/bin"
 
           # Clone and build Maven from specified branch/commit
-          echo "Building Maven from branch/commit: ${{ github.event.inputs.maven_branch_or_commit }}"
+          MAVEN_REF="${{ github.event.inputs.maven_branch_or_commit }}"
+          echo "Building Maven from: $MAVEN_REF"
           git clone https://github.com/apache/maven.git maven-source
           cd maven-source
-          git checkout ${{ github.event.inputs.maven_branch_or_commit }}
+          # Support PR refs (e.g. "pull/12430/head") by fetching before checkout
+          if [[ "$MAVEN_REF" == pull/* ]]; then
+            git fetch origin "$MAVEN_REF"
+            git checkout FETCH_HEAD
+          else
+            git checkout "$MAVEN_REF"
+          fi
 
           # Build Maven without tests
           echo "Building Maven distribution using bootstrap Maven ${{ github.event.inputs.maven_version }}..."
