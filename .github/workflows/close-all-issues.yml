@@ -1,0 +1,54 @@
+name: Close All Issues
+
+on:
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  close-issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close all open issues
+        uses: actions/github-script@v8
+        with:
+          script: |
+            let closed = 0;
+            let page = 1;
+            const perPage = 100;
+
+            while (true) {
+              // Always fetch page 1 since we're closing them
+              const { data: issues } = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                per_page: perPage,
+                page: 1,
+              });
+
+              if (issues.length === 0) {
+                console.log(`Done! Total closed: ${closed}`);
+                break;
+              }
+
+              // Close in parallel batches of 20
+              const batchSize = 20;
+              for (let i = 0; i < issues.length; i += batchSize) {
+                const batch = issues.slice(i, i + batchSize);
+                await Promise.all(batch.map(issue =>
+                  github.rest.issues.update({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issue.number,
+                    state: 'closed',
+                  }).catch(err => console.log(`Failed to close #${issue.number}: ${err.message}`))
+                ));
+                closed += batch.length;
+              }
+
+              console.log(`Closed ${closed} issues so far...`);
+            }
+
+            console.log(`\nAll done! Closed ${closed} issues total.`);
