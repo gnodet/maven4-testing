@@ -151,12 +151,28 @@ jobs:
           BUILD_MAVEN_BIN="$GITHUB_WORKSPACE/apache-maven-${{ github.event.inputs.maven_version }}/bin"
 
           # Clone and build Maven from specified branch/commit
+          # Supports multiple refs separated by '+' (e.g. "pull/12430/head+pull/12443/head+pull/12446/head")
           MAVEN_REF="${{ github.event.inputs.maven_branch_or_commit }}"
           echo "Building Maven from: $MAVEN_REF"
           git clone https://github.com/apache/maven.git maven-source
           cd maven-source
-          # Support PR refs (e.g. "pull/12430/head") by fetching before checkout
-          if [[ "$MAVEN_REF" == pull/* ]]; then
+
+          # Split refs by '+' and process each one
+          IFS='+' read -ra REFS <<< "$MAVEN_REF"
+          if [ ${#REFS[@]} -gt 1 ]; then
+            echo "Multiple refs detected — merging ${#REFS[@]} refs onto master"
+            git checkout master
+            for ref in "${REFS[@]}"; do
+              ref=$(echo "$ref" | xargs)  # trim whitespace
+              echo "Merging ref: $ref"
+              if [[ "$ref" == pull/* ]]; then
+                git fetch origin "$ref"
+                git merge FETCH_HEAD --no-edit -m "Merge $ref for testing"
+              else
+                git merge "$ref" --no-edit -m "Merge $ref for testing"
+              fi
+            done
+          elif [[ "$MAVEN_REF" == pull/* ]]; then
             git fetch origin "$MAVEN_REF"
             git checkout FETCH_HEAD
           else
