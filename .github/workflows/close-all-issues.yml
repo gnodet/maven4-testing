@@ -9,61 +9,65 @@ permissions:
 jobs:
   close-issues:
     runs-on: ubuntu-latest
-    timeout-minutes: 350  # just under the 6h max
+    timeout-minutes: 350
     steps:
-      - name: Close all open issues
+      - name: Close all open issues via GraphQL
         uses: actions/github-script@v8
         with:
           script: |
             let closed = 0;
-            const perPage = 100;
-            const batchSize = 20;
-            const RATE_LIMIT_BUFFER = 200; // pause when remaining drops below this
-
-            async function checkRateLimit() {
-              const { data: rateLimit } = await github.rest.rateLimit.get();
-              const remaining = rateLimit.resources.core.remaining;
-              const resetAt = rateLimit.resources.core.reset;
-
-              if (remaining < RATE_LIMIT_BUFFER) {
-                const now = Math.floor(Date.now() / 1000);
-                const waitSeconds = Math.max(resetAt - now + 5, 10);
-                console.log(`Rate limit low (${remaining} remaining). Waiting ${waitSeconds}s until reset...`);
-                await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000));
-                console.log('Rate limit should be reset, resuming...');
-              }
-            }
+            const BATCH_SIZE = 100; // close 100 issues per GraphQL request
 
             while (true) {
-              // Check rate limit before each page fetch
-              await checkRateLimit();
+              // Fetch open issues via GraphQL (separate rate limit from REST)
+              const query = `query($owner: String!, $name: String!) {
+                repository(owner: $owner, name: $name) {
+                  issues(states: OPEN, first: 100) {
+                    totalCount
+                    nodes { id number }
+                  }
+                }
+              }`;
 
-              const { data: issues } = await github.rest.issues.listForRepo({
+              const result = await github.graphql(query, {
                 owner: context.repo.owner,
-                repo: context.repo.repo,
-                state: 'open',
-                per_page: perPage,
-                page: 1,
+                name: context.repo.repo,
               });
+
+              const issues = result.repository.issues.nodes;
+              const remaining = result.repository.issues.totalCount;
 
               if (issues.length === 0) {
                 console.log(`Done! Total closed: ${closed}`);
                 break;
               }
 
-              // Close in parallel batches of 20
-              for (let i = 0; i < issues.length; i += batchSize) {
-                await checkRateLimit();
-                const batch = issues.slice(i, i + batchSize);
-                await Promise.all(batch.map(issue =>
-                  github.rest.issues.update({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    issue_number: issue.number,
-                    state: 'closed',
-                  }).catch(err => console.log(`Failed to close #${issue.number}: ${err.message}`))
-                ));
-                closed += batch.length;
+              console.log(`${remaining} issues remaining...`);
+
+              // Build a batched mutation to close all fetched issues in one call
+              for (let i = 0; i < issues.length; i += BATCH_SIZE) {
+                const batch = issues.slice(i, i + BATCH_SIZE);
+                const mutations = batch.map((issue, idx) =>
+                  `i${idx}: closeIssue(input: {issueId: "${issue.id}"}) { issue { number } }`
+                ).join('\n');
+
+                const mutation = `mutation { ${mutations} }`;
+
+                try {
+                  await github.graphql(mutation);
+                  closed += batch.length;
+                } catch (err) {
+                  console.log(`Batch failed: ${err.message}`);
+                  // Fall back to one-by-one for this batch
+                  for (const issue of batch) {
+                    try {
+                      await github.graphql(`mutation { closeIssue(input: {issueId: "${issue.id}"}) { issue { number } } }`);
+                      closed++;
+                    } catch (e) {
+                      console.log(`Failed to close #${issue.number}: ${e.message}`);
+                    }
+                  }
+                }
               }
 
               console.log(`Closed ${closed} issues so far...`);
