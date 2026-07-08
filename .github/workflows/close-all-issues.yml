@@ -9,17 +9,35 @@ permissions:
 jobs:
   close-issues:
     runs-on: ubuntu-latest
+    timeout-minutes: 350  # just under the 6h max
     steps:
       - name: Close all open issues
         uses: actions/github-script@v8
         with:
           script: |
             let closed = 0;
-            let page = 1;
             const perPage = 100;
+            const batchSize = 20;
+            const RATE_LIMIT_BUFFER = 200; // pause when remaining drops below this
+
+            async function checkRateLimit() {
+              const { data: rateLimit } = await github.rest.rateLimit.get();
+              const remaining = rateLimit.resources.core.remaining;
+              const resetAt = rateLimit.resources.core.reset;
+
+              if (remaining < RATE_LIMIT_BUFFER) {
+                const now = Math.floor(Date.now() / 1000);
+                const waitSeconds = Math.max(resetAt - now + 5, 10);
+                console.log(`Rate limit low (${remaining} remaining). Waiting ${waitSeconds}s until reset...`);
+                await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000));
+                console.log('Rate limit should be reset, resuming...');
+              }
+            }
 
             while (true) {
-              // Always fetch page 1 since we're closing them
+              // Check rate limit before each page fetch
+              await checkRateLimit();
+
               const { data: issues } = await github.rest.issues.listForRepo({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -34,8 +52,8 @@ jobs:
               }
 
               // Close in parallel batches of 20
-              const batchSize = 20;
               for (let i = 0; i < issues.length; i += batchSize) {
+                await checkRateLimit();
                 const batch = issues.slice(i, i + batchSize);
                 await Promise.all(batch.map(issue =>
                   github.rest.issues.update({
