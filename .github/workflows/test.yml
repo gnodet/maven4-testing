@@ -116,6 +116,7 @@ jobs:
           for i in $(seq 1 $NUM_CHUNKS); do
             echo "Triggering workflow for chunk $i with build ID: $BUILD_ID"
             gh workflow run test.yml \
+              --ref '${{ github.ref_name }}' \
               -f maven_version='${{ github.event.inputs.maven_version }}' \
               -f maven_branch_or_commit='${{ github.event.inputs.maven_branch_or_commit }}' \
               -f chunk_number=$i \
