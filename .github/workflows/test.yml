@@ -250,34 +250,61 @@ jobs:
       - name: Detect required JDK version
         id: detect-jdk
         run: |
-          # Default to JDK 17
+          # Default to JDK 17 (minimum for Maven 4)
           JDK_VERSION="17"
+          TOOLCHAIN_JDK=""
+
+          # Map a detected version to the nearest available JDK (8, 11, 17, 21, 25)
+          map_to_available_jdk() {
+            local v="$1"
+            if [ "$v" -ge "25" ] 2>/dev/null; then echo "25"
+            elif [ "$v" -ge "21" ] 2>/dev/null; then echo "21"
+            elif [ "$v" -ge "17" ] 2>/dev/null; then echo "17"
+            elif [ "$v" -ge "11" ] 2>/dev/null; then echo "11"
+            else echo "8"
+            fi
+          }
+
+          # Update JDK_VERSION if the candidate is higher
+          update_jdk() {
+            local candidate="$1"
+            local source="$2"
+            if [ -n "$candidate" ] && [ "$candidate" -gt "0" ] 2>/dev/null; then
+              local mapped=$(map_to_available_jdk "$candidate")
+              # Compare as integers
+              local current_num=$(echo "$JDK_VERSION" | grep -oE '[0-9]+')
+              local mapped_num=$(echo "$mapped" | grep -oE '[0-9]+')
+              if [ "$mapped_num" -gt "$current_num" ] 2>/dev/null; then
+                echo "  $source=$candidate -> JDK $mapped" >&2
+                JDK_VERSION="$mapped"
+              fi
+            fi
+          }
 
           # Function to check a POM file for JDK requirements
           check_pom_for_jdk() {
             local pom_file="$1"
-            local current_jdk="$2"
 
             if [ ! -f "$pom_file" ]; then
-              echo "$current_jdk"
               return
             fi
 
             echo "Checking $pom_file for JDK requirements..." >&2
 
-            # Look for requireJavaVersion in enforcer plugin
-            ENFORCER_JAVA=$(grep -A 30 "maven-enforcer-plugin" "$pom_file" | grep -A 10 "requireJavaVersion" | grep -oE '[0-9]+(\.[0-9]+)*' | sort -V | tail -1 || true)
-
-            if [ -n "$ENFORCER_JAVA" ]; then
-              echo "Found enforcer requireJavaVersion: $ENFORCER_JAVA" >&2
-              if [ "$ENFORCER_JAVA" -ge "21" ]; then
-                current_jdk="21"
-              elif [ "$ENFORCER_JAVA" -ge "17" ]; then
-                current_jdk="17"
-              elif [ "$ENFORCER_JAVA" -ge "11" ]; then
-                current_jdk="11"
-              elif [ "$ENFORCER_JAVA" -ge "8" ]; then
-                current_jdk="8"
+            # Look for requireJavaVersion in enforcer plugin — handles both
+            # plain versions (e.g. "17") and ranges (e.g. "[21,)" or "[25,)")
+            ENFORCER_SECTION=$(grep -A 50 "maven-enforcer-plugin" "$pom_file" | grep -A 20 "requireJavaVersion" || true)
+            if [ -n "$ENFORCER_SECTION" ]; then
+              # Try range syntax first: [21,) or [25,)
+              ENFORCER_RANGE=$(echo "$ENFORCER_SECTION" | grep -oE '\[([0-9]+)' | grep -oE '[0-9]+' | sort -V | tail -1 || true)
+              if [ -n "$ENFORCER_RANGE" ]; then
+                update_jdk "$ENFORCER_RANGE" "enforcer requireJavaVersion range"
+              else
+                # Plain version number
+                ENFORCER_JAVA=$(echo "$ENFORCER_SECTION" | grep -oE '[0-9]+(\.[0-9]+)*' | grep -oE '^[0-9]+' | sort -V | tail -1 || true)
+                if [ -n "$ENFORCER_JAVA" ]; then
+                  update_jdk "$ENFORCER_JAVA" "enforcer requireJavaVersion"
+                fi
               fi
             fi
 
@@ -285,73 +312,57 @@ jobs:
             COMPILER_SOURCE=$(grep -oE '<maven\.compiler\.source>[^<]+' "$pom_file" | grep -oE '[0-9]+' | tail -1 || true)
             COMPILER_TARGET=$(grep -oE '<maven\.compiler\.target>[^<]+' "$pom_file" | grep -oE '[0-9]+' | tail -1 || true)
             COMPILER_RELEASE=$(grep -oE '<maven\.compiler\.release>[^<]+' "$pom_file" | grep -oE '[0-9]+' | tail -1 || true)
-
-            if [ -n "$COMPILER_RELEASE" ] && [ "$COMPILER_RELEASE" -gt "17" ]; then
-              current_jdk="21"
-              echo "Found maven.compiler.release=$COMPILER_RELEASE -> JDK $current_jdk" >&2
-            elif [ -n "$COMPILER_SOURCE" ] && [ "$COMPILER_SOURCE" -gt "17" ]; then
-              current_jdk="21"
-              echo "Found maven.compiler.source=$COMPILER_SOURCE -> JDK $current_jdk" >&2
-            elif [ -n "$COMPILER_TARGET" ] && [ "$COMPILER_TARGET" -gt "17" ]; then
-              current_jdk="21"
-              echo "Found maven.compiler.target=$COMPILER_TARGET -> JDK $current_jdk" >&2
-            fi
+            update_jdk "$COMPILER_RELEASE" "maven.compiler.release"
+            update_jdk "$COMPILER_SOURCE" "maven.compiler.source"
+            update_jdk "$COMPILER_TARGET" "maven.compiler.target"
 
             # Check for java.version and minimalJavaBuildVersion properties
             JAVA_VERSION_PROP=$(grep -oE '<java\.version>[^<]+' "$pom_file" | grep -oE '[0-9]+' | tail -1 || true)
-            if [ -n "$JAVA_VERSION_PROP" ] && [ "$JAVA_VERSION_PROP" -gt "17" ]; then
-              current_jdk="21"
-              echo "Found java.version=$JAVA_VERSION_PROP -> JDK $current_jdk" >&2
-            fi
+            update_jdk "$JAVA_VERSION_PROP" "java.version"
 
             MINIMAL_JAVA=$(grep -oE '<minimalJavaBuildVersion>[^<]+' "$pom_file" | grep -oE '[0-9]+' | tail -1 || true)
-            if [ -n "$MINIMAL_JAVA" ] && [ "$MINIMAL_JAVA" -gt "17" ]; then
-              current_jdk="21"
-              echo "Found minimalJavaBuildVersion=$MINIMAL_JAVA -> JDK $current_jdk" >&2
-            fi
+            update_jdk "$MINIMAL_JAVA" "minimalJavaBuildVersion"
 
-            echo "$current_jdk"
+            # Check for toolchain requirements (e.g. jdk version='1.8')
+            TOOLCHAIN_VER=$(grep -A 20 "maven-toolchains-plugin" "$pom_file" | grep -oE "version>[^<]*['\"]?([0-9]+(\.[0-9]+)*)" | grep -oE '[0-9]+(\.[0-9]+)*' | head -1 || true)
+            if [ -n "$TOOLCHAIN_VER" ]; then
+              # Extract major version (1.8 -> 8, 11 -> 11)
+              TOOLCHAIN_MAJOR=$(echo "$TOOLCHAIN_VER" | sed 's/^1\.//' | grep -oE '^[0-9]+')
+              if [ -n "$TOOLCHAIN_MAJOR" ]; then
+                echo "  Toolchain requires JDK $TOOLCHAIN_VER (major: $TOOLCHAIN_MAJOR)" >&2
+                TOOLCHAIN_JDK=$(map_to_available_jdk "$TOOLCHAIN_MAJOR")
+              fi
+            fi
           }
 
           # Function to download parent POM if needed
           download_parent_pom() {
             local pom_file="$1"
-
-            # Extract parent information
             PARENT_GROUP=$(grep -A 5 "<parent>" "$pom_file" | grep "<groupId>" | sed 's/.*<groupId>\(.*\)<\/groupId>.*/\1/' || true)
             PARENT_ARTIFACT=$(grep -A 5 "<parent>" "$pom_file" | grep "<artifactId>" | sed 's/.*<artifactId>\(.*\)<\/artifactId>.*/\1/' || true)
             PARENT_VERSION=$(grep -A 5 "<parent>" "$pom_file" | grep "<version>" | sed 's/.*<version>\(.*\)<\/version>.*/\1/' || true)
 
             if [ -n "$PARENT_GROUP" ] && [ -n "$PARENT_ARTIFACT" ] && [ -n "$PARENT_VERSION" ]; then
               echo "Found parent: $PARENT_GROUP:$PARENT_ARTIFACT:$PARENT_VERSION" >&2
-
-              # Try to download parent POM from Maven Central
               PARENT_URL="https://repo1.maven.org/maven2/$(echo $PARENT_GROUP | tr '.' '/')/$PARENT_ARTIFACT/$PARENT_VERSION/$PARENT_ARTIFACT-$PARENT_VERSION.pom"
-              echo "Downloading parent POM from: $PARENT_URL" >&2
-
               if curl -s -f "$PARENT_URL" -o "parent-pom.xml"; then
                 echo "Successfully downloaded parent POM" >&2
                 return 0
-              else
-                echo "Failed to download parent POM" >&2
-                return 1
               fi
             fi
             return 1
           }
 
-          # Check project POM
+          # Check project POM and parent POM
           if [ -f "project/pom.xml" ]; then
-            JDK_VERSION=$(check_pom_for_jdk "project/pom.xml" "$JDK_VERSION")
-
-            # Try to download and check parent POM
+            check_pom_for_jdk "project/pom.xml"
             if download_parent_pom "project/pom.xml"; then
-              JDK_VERSION=$(check_pom_for_jdk "parent-pom.xml" "$JDK_VERSION")
+              check_pom_for_jdk "parent-pom.xml"
             fi
           fi
 
           # Maven 4 requires JDK 17+, so enforce minimum
-          if [ "$JDK_VERSION" != "21" ] && [ "$(echo -e "$JDK_VERSION\n17" | sort -V | head -1)" != "17" ]; then
+          if [ "$(echo "$JDK_VERSION" | grep -oE '[0-9]+')" -lt "17" ] 2>/dev/null; then
             echo "JDK $JDK_VERSION detected, but Maven 4 requires 17+. Upgrading to 17."
             JDK_VERSION="17"
           fi
@@ -359,11 +370,76 @@ jobs:
           echo "Final JDK version: $JDK_VERSION"
           echo "jdk-version=$JDK_VERSION" >> $GITHUB_OUTPUT
 
+          # Report toolchain JDK if different from main JDK
+          if [ -n "$TOOLCHAIN_JDK" ]; then
+            echo "Toolchain JDK needed: $TOOLCHAIN_JDK"
+            echo "toolchain-jdk=$TOOLCHAIN_JDK" >> $GITHUB_OUTPUT
+          fi
+
+      # Install toolchain JDK first (if needed) so setup-java doesn't overwrite JAVA_HOME
+      - name: Set up toolchain JDK ${{ steps.detect-jdk.outputs.toolchain-jdk }}
+        if: steps.detect-jdk.outputs.toolchain-jdk != ''
+        uses: actions/setup-java@v5
+        with:
+          java-version: ${{ steps.detect-jdk.outputs.toolchain-jdk }}
+          distribution: 'temurin'
+
       - name: Set up JDK ${{ steps.detect-jdk.outputs.jdk-version }}
         uses: actions/setup-java@v5
         with:
           java-version: ${{ steps.detect-jdk.outputs.jdk-version }}
           distribution: 'temurin'
+
+      - name: Generate toolchains.xml
+        run: |
+          # Generate toolchains.xml listing all installed JDKs
+          mkdir -p ~/.m2
+          cat > ~/.m2/toolchains.xml << 'TOOLCHAINS_EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <toolchains>
+          TOOLCHAINS_EOF
+
+          # Find all installed JDKs from setup-java (they land in /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk)
+          for jdk_dir in /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/*/x64; do
+            if [ -d "$jdk_dir" ]; then
+              FULL_VERSION=$("$jdk_dir/bin/java" -version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+              MAJOR_VERSION=$(echo "$FULL_VERSION" | cut -d. -f1)
+              if [ -n "$MAJOR_VERSION" ]; then
+                echo "  Adding JDK $MAJOR_VERSION ($FULL_VERSION) at $jdk_dir to toolchains.xml"
+                cat >> ~/.m2/toolchains.xml << EOF
+            <toolchain>
+              <type>jdk</type>
+              <provides>
+                <version>$MAJOR_VERSION</version>
+                <vendor>temurin</vendor>
+              </provides>
+              <configuration>
+                <jdkHome>$jdk_dir</jdkHome>
+              </configuration>
+            </toolchain>
+          EOF
+                # Also add 1.X alias for JDK 8
+                if [ "$MAJOR_VERSION" = "8" ]; then
+                  cat >> ~/.m2/toolchains.xml << EOF
+            <toolchain>
+              <type>jdk</type>
+              <provides>
+                <version>1.8</version>
+                <vendor>temurin</vendor>
+              </provides>
+              <configuration>
+                <jdkHome>$jdk_dir</jdkHome>
+              </configuration>
+            </toolchain>
+          EOF
+                fi
+              fi
+            fi
+          done
+
+          echo "  </toolchains>" >> ~/.m2/toolchains.xml
+          echo "Generated toolchains.xml:"
+          cat ~/.m2/toolchains.xml
 
       - name: Download built Maven artifact
         if: github.event.inputs.maven_branch_or_commit != ''
