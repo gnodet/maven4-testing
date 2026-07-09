@@ -16,7 +16,7 @@ jobs:
         with:
           script: |
             let closed = 0;
-            const BATCH_SIZE = 100; // close 100 issues per GraphQL request
+            const BATCH_SIZE = 20; // keep under GraphQL resource limits
 
             while (true) {
               // Fetch open issues via GraphQL (separate rate limit from REST)
