@@ -423,14 +423,22 @@ jobs:
 
             const existingSummary = summaryIssues.data.find(issue => issue.title === summaryTitle);
 
-            if (existingSummary && existingSummary.body) {
-              const buildIdMatch = existingSummary.body.match(/Build ID:\s*([^\n]+)/);
-              const summaryBuildId = buildIdMatch ? buildIdMatch[1].trim() : null;
+            if (existingSummary) {
+              // If the summary issue is closed, this run is obsolete — skip
+              if (existingSummary.state === 'closed') {
+                console.log(`Summary issue #${existingSummary.number} is closed — this build is obsolete, skipping.`);
+                process.exit(0);
+              }
 
-              if (summaryBuildId && summaryBuildId !== currentBuildId) {
-                console.log(`Build ID mismatch detected - this build (${currentBuildId}) is outdated. Current build: ${summaryBuildId}`);
-                console.log('Exiting job early to avoid processing projects unnecessarily.');
-                process.exit(0); // Exit gracefully since this is expected behavior
+              if (existingSummary.body) {
+                const buildIdMatch = existingSummary.body.match(/Build ID:\s*([^\n]+)/);
+                const summaryBuildId = buildIdMatch ? buildIdMatch[1].trim() : null;
+
+                if (summaryBuildId && summaryBuildId !== currentBuildId) {
+                  console.log(`Build ID mismatch detected - this build (${currentBuildId}) is outdated. Current build: ${summaryBuildId}`);
+                  console.log('Exiting job early to avoid processing projects unnecessarily.');
+                  process.exit(0);
+                }
               }
             }
 
