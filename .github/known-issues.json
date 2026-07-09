@@ -106,7 +106,8 @@
     "projectPatterns": [
       "guacamole-client",
       "logging-log4j-samples",
-      "netbeans-html4j"
+      "netbeans-html4j",
+      "camel-quarkus"
     ]
   },
   {
@@ -120,6 +121,64 @@
     "projectPatterns": [
       "hadoop-api-shim",
       "flink-connector-hive"
+    ]
+  },
+  {
+    "id": "property-interpolation-in-modules",
+    "description": "Maven 4 no longer interpolates properties in <module> paths at POM reading time — projects using ${spark.version} or similar in module names fail",
+    "errorPatterns": [
+      "Child subproject",
+      "does not exist"
+    ],
+    "projectPatterns": [
+      "amoro",
+      "sedona"
+    ]
+  },
+  {
+    "id": "quarkus-maven4-repositorysystem",
+    "description": "Quarkus plugin (especially < 3.20) uses ServiceLocator/RepositorySystem patterns incompatible with Maven 4's Sisu-based DI",
+    "errorPatterns": [
+      "NoSuchBeanException",
+      "RepositorySystem"
+    ],
+    "projectPatterns": [
+      "camel-k-runtime",
+      "camel-performance-tests",
+      "incubator-kie-optaplanner-quickstarts"
+    ]
+  },
+  {
+    "id": "snapshot-present-but-unavailable",
+    "description": "SNAPSHOT artifacts marked as 'present, but unavailable' under Maven 4's resolver — different metadata handling",
+    "errorPatterns": [
+      "present, but unavailable"
+    ],
+    "projectPatterns": [
+      "camel-spring-boot"
+    ]
+  },
+  {
+    "id": "prefix-filtering-blocks-artifacts",
+    "description": "Maven 4's prefix-based repository routing blocks artifacts not matching /.meta/prefixes.txt — artifacts available in Maven 3 become unfindable",
+    "errorPatterns": [
+      "prefixes",
+      "NOT allowed from repo"
+    ],
+    "projectPatterns": [
+      "cloudstack"
+    ]
+  },
+  {
+    "id": "tycho-maven4-guice",
+    "description": "Tycho < 5.0 uses Guice/Sisu injection patterns broken by Maven 4's classloading — upgrade to Tycho 5.0.3+",
+    "errorPatterns": [
+      "tycho",
+      "ProvisionException",
+      "TargetPlatformFactory"
+    ],
+    "projectPatterns": [
+      "uima-ruta"
     ]
   }
 ]
