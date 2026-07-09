@@ -151,7 +151,11 @@ jobs:
           BUILD_MAVEN_BIN="$GITHUB_WORKSPACE/apache-maven-${{ github.event.inputs.maven_version }}/bin"
 
           # Clone and build Maven from specified branch/commit
-          # Supports multiple refs separated by '+' (e.g. "pull/12430/head+pull/12443/head+pull/12446/head")
+          # Supports:
+          #   - branch/commit name (checked out from apache/maven)
+          #   - pull/<number>/head (fetched from apache/maven)
+          #   - <owner>/<repo>:<branch> (fetched from a fork, e.g. gnodet/maven:test/my-branch)
+          #   - multiple refs separated by '+' (merged onto master)
           MAVEN_REF="${{ github.event.inputs.maven_branch_or_commit }}"
           echo "Building Maven from: $MAVEN_REF"
           git clone https://github.com/apache/maven.git maven-source
@@ -161,9 +165,17 @@ jobs:
           git config user.email "maven4-testing@github.actions"
           git config user.name "Maven 4 Testing"
 
+          # Check for fork reference (owner/repo:branch)
+          if [[ "$MAVEN_REF" == *:* ]]; then
+            FORK_REPO="${MAVEN_REF%%:*}"
+            FORK_BRANCH="${MAVEN_REF#*:}"
+            echo "Fork reference detected — fetching $FORK_BRANCH from $FORK_REPO"
+            git remote add fork "https://github.com/$FORK_REPO.git"
+            git fetch fork "$FORK_BRANCH"
+            git checkout "fork/$FORK_BRANCH"
           # Split refs by '+' and process each one
-          IFS='+' read -ra REFS <<< "$MAVEN_REF"
-          if [ ${#REFS[@]} -gt 1 ]; then
+          elif [[ "$MAVEN_REF" == *+* ]]; then
+            IFS='+' read -ra REFS <<< "$MAVEN_REF"
             echo "Multiple refs detected — merging ${#REFS[@]} refs onto master"
             git checkout master
             for ref in "${REFS[@]}"; do
