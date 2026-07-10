@@ -166,7 +166,8 @@
       "NOT allowed from repo"
     ],
     "projectPatterns": [
-      "cloudstack"
+      "cloudstack",
+      "ws-axiom"
     ]
   },
   {
@@ -179,6 +180,76 @@
     ],
     "projectPatterns": [
       "uima-ruta"
+    ]
+  },
+  {
+    "id": "maven4-foreign-imports",
+    "description": "Maven 4 classloading changes cause 'foreign imports' errors in plugins that rely on Maven 3's classrealm layout (Quarkus, JAXB, etc.)",
+    "errorPatterns": [
+      "Number of foreign imports"
+    ],
+    "projectPatterns": [
+      "ctakes",
+      "incubator-kie-optaplanner-quickstarts"
+    ]
+  },
+  {
+    "id": "transitive-dep-lost",
+    "description": "Maven 4's TransitiveDependencyManager changes transitive dependency resolution, causing previously available dependencies to disappear from the classpath — projects need to add explicit dependency declarations",
+    "url": "https://github.com/apache/maven/issues/12302",
+    "errorPatterns": [
+      "package org.apache.hadoop",
+      "does not exist"
+    ],
+    "projectPatterns": [
+      "seatunnel",
+      "seatunnel-web",
+      "kyuubi",
+      "incubator-streampark"
+    ]
+  },
+  {
+    "id": "transitive-dep-lost-license",
+    "description": "Maven 4's different dependency resolution brings in new transitive deps not listed in the project's license MISSING.properties file, causing license-maven-plugin to fail",
+    "errorPatterns": [
+      "license-maven-plugin",
+      "dependencies with no license"
+    ],
+    "projectPatterns": [
+      "drill"
+    ]
+  },
+  {
+    "id": "karaf-feature-resolution",
+    "description": "Karaf feature verification fails under Maven 4 due to OSGi bundle version mismatches from changed transitive dependency resolution",
+    "errorPatterns": [
+      "Feature resolution failed",
+      "osgi.wiring.package"
+    ],
+    "projectPatterns": [
+      "camel-karaf"
+    ]
+  },
+  {
+    "id": "ci-friendly-version-missing",
+    "description": "Projects using ${revision} CI-friendly versions without flatten-maven-plugin have missing dependency versions under Maven 4's stricter validation",
+    "errorPatterns": [
+      "dependency.version",
+      "is missing"
+    ],
+    "projectPatterns": [
+      "incubator-seata"
+    ]
+  },
+  {
+    "id": "maven-site-plugin-velocity",
+    "description": "maven-site-plugin Velocity template rendering fails under Maven 4 — incompatible site plugin version",
+    "errorPatterns": [
+      "Exception in macro #htmlContent",
+      "Exception rendering"
+    ],
+    "projectPatterns": [
+      "openmeetings"
     ]
   }
 ]
