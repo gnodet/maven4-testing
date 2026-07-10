@@ -160,11 +160,17 @@ async function runMaven4Build() {
     try {
       execSync(`test -f "${mvnupPath}"`);
       console.log('Found mvnup script, running mvnup apply...');
+      // Unset MAVEN_ARGS to prevent project/CI env vars from leaking into mvnup.
+      // mvnup is a thin wrapper around `mvn --up`, so it inherits MAVEN_ARGS
+      // and .mvn/maven.config — options like --ntp can cause unexpected failures.
+      const mvnupEnv = { ...process.env };
+      delete mvnupEnv.MAVEN_ARGS;
       mvnupOutput = execSync(`"${mvnupPath}" apply 2>&1`, {
         encoding: 'utf8',
         cwd: process.cwd() + '/project',
         timeout: 300000, // 5 minutes timeout for mvnup
-        maxBuffer: 50 * 1024 * 1024 // 50 MB
+        maxBuffer: 50 * 1024 * 1024, // 50 MB
+        env: mvnupEnv
       });
       console.log('mvnup apply completed successfully');
     } catch (mvnupError) {
@@ -197,7 +203,8 @@ async function runMaven4Build() {
     if (mvnupOutput && mvnupOutput.includes('Modified')) {
       for (const fmt of [
         { name: 'spotless', goal: 'spotless:apply' },
-        { name: 'sortpom',  goal: 'sortpom:sort'   }
+        { name: 'sortpom',  goal: 'sortpom:sort'   },
+        { name: 'tidy',     goal: 'tidy:pom'        }
       ]) {
         try {
           console.log(`Trying ${fmt.name} to reformat POMs after mvnup...`);

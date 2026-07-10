@@ -203,9 +203,31 @@
     ],
     "projectPatterns": [
       "seatunnel",
-      "seatunnel-web",
-      "kyuubi",
-      "incubator-streampark"
+      "seatunnel-web"
+    ]
+  },
+  {
+    "id": "transitive-dep-lost-compilation",
+    "description": "Maven 4's TransitiveDependencyManager changes cause 'cannot find symbol' compilation errors — transitive dependencies no longer on classpath",
+    "url": "https://github.com/apache/maven/issues/12302",
+    "errorPatterns": [
+      "cannot find symbol"
+    ],
+    "projectPatterns": [
+      "flink-cdc",
+      "gora"
+    ]
+  },
+  {
+    "id": "transitive-dep-lost-scala",
+    "description": "Maven 4's TransitiveDependencyManager changes cause Scala compilation errors — transitive dependencies (javax.annotation, etc.) no longer on classpath",
+    "url": "https://github.com/apache/maven/issues/12302",
+    "errorPatterns": [
+      "is not a member of package"
+    ],
+    "projectPatterns": [
+      "incubator-streampark",
+      "kyuubi"
     ]
   },
   {
