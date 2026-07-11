@@ -38,6 +38,18 @@ async function runMaven3Build() {
   let maven3Output = '';
   let maven3Error = '';
 
+  // Early exit: skip projects with no pom.xml at root — these are sub-repos,
+  // retired projects, or repos that use a different build system entirely.
+  const projectPomPath = path.join(process.cwd(), 'project', 'pom.xml');
+  if (!fs.existsSync(projectPomPath)) {
+    console.log('No pom.xml found in project root — skipping (not a Maven project)');
+    return {
+      maven3Success: false,
+      maven3Output: 'No pom.xml found',
+      maven3Error: 'No pom.xml found at project root. This repository may be a sub-module, retired, or use a different build system.'
+    };
+  }
+
   try {
     console.log('Testing with Maven 3.x first...');
 
@@ -66,9 +78,42 @@ async function runMaven3Build() {
     }
 
     const maven3VersionInfo = execSync(`${maven3Command} -version 2>&1`, { encoding: 'utf8', cwd: process.cwd() + '/project' });
+
+    // Fix HTTP repository URLs that are blocked by Maven 3.8.1+.
+    // Since Maven 3.8.1, http:// repositories are blocked by default (CVE-2021-26291).
+    // Many older Apache projects still declare http:// repo URLs in their POMs.
+    // We rewrite these to https:// before the build to avoid false-positive failures.
+    try {
+      const httpFixCount = execSync(
+        `find project -name pom.xml -exec grep -l 'http://repo\\|http://repository\\|http://snapshots\\|http://people.apache' {} \\; 2>/dev/null | head -50`,
+        { encoding: 'utf8', cwd: process.cwd() }
+      ).trim();
+      if (httpFixCount) {
+        console.log('Fixing HTTP repository URLs blocked by Maven 3.8.1+...');
+        execSync(
+          `find project -name pom.xml -exec sed -i ` +
+          `-e 's|http://repo\\.maven\\.apache\\.org|https://repo.maven.apache.org|g' ` +
+          `-e 's|http://repository\\.apache\\.org|https://repository.apache.org|g' ` +
+          `-e 's|http://repo1\\.maven\\.org|https://repo1.maven.org|g' ` +
+          `-e 's|http://snapshots\\.repository\\.codehaus\\.org|https://repository.codehaus.org|g' ` +
+          `-e 's|http://people\\.apache\\.org|https://people.apache.org|g' ` +
+          `-e 's|http://www\\.ibiblio\\.org/maven2|https://repo.maven.apache.org/maven2|g' ` +
+          `{} \\;`,
+          { encoding: 'utf8', cwd: process.cwd(), timeout: 60000 }
+        );
+        console.log('HTTP→HTTPS repository URL rewrite completed');
+      }
+    } catch (httpFixError) {
+      console.log('HTTP URL fix failed (non-fatal):', httpFixError.message);
+    }
+
     console.log('Running Maven 3.x build...');
     // Run Maven build and capture output
-    const maven3BuildOutput = execSync(`${maven3Command} -V -B -e package -DskipTests -Dmaven.repo.local=\${HOME}/.m2/repository-m3 2>&1`, {
+    // Skip lint/doc checks that are irrelevant to Maven compatibility testing:
+    //   -Drat.skip          — Apache RAT license header checks
+    //   -Dmaven.javadoc.skip — Javadoc generation (locale/encoding errors)
+    //   -Dcheckstyle.skip    — Checkstyle (style-only, not build correctness)
+    const maven3BuildOutput = execSync(`${maven3Command} -V -B -e package -DskipTests -Drat.skip=true -Dmaven.javadoc.skip=true -Dcheckstyle.skip=true -Dmaven.repo.local=\${HOME}/.m2/repository-m3 2>&1`, {
       encoding: 'utf8',
       cwd: process.cwd() + '/project',
       timeout: 3600000, // 60 minutes timeout
@@ -227,7 +272,7 @@ async function runMaven4Build() {
     }
 
     console.log('Running Maven 4.x build...');
-    const buildOutput = execSync('mvn -V -B -e clean package -DskipTests -Dmaven.repo.local=${HOME}/.m2/repository-m4 2>&1', {
+    const buildOutput = execSync('mvn -V -B -e clean package -DskipTests -Drat.skip=true -Dmaven.javadoc.skip=true -Dcheckstyle.skip=true -Dmaven.repo.local=${HOME}/.m2/repository-m4 2>&1', {
       encoding: 'utf8',
       cwd: process.cwd() + '/project',
       timeout: 3600000, // 60 minutes timeout
