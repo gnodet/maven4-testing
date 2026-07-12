@@ -317,7 +317,7 @@ async function runMaven4Build() {
     }
 
     console.log('Running Maven 4.x build...');
-    const maven4Cmd = 'mvn -V -B -e clean package -DskipTests -Drat.skip=true -Dmaven.javadoc.skip=true -Dcheckstyle.skip=true -Dmaven.repo.local=${HOME}/.m2/repository-m4 2>&1';
+    const maven4Cmd = 'mvn -V -B -e clean package -DskipTests -Drat.skip=true -Dmaven.javadoc.skip=true -Dcheckstyle.skip=true -Dspotless.check.skip=true -Dsort.skip=true -Dmaven.repo.local=${HOME}/.m2/repository-m4 2>&1';
     let buildOutput;
     try {
       buildOutput = execSync(maven4Cmd, {

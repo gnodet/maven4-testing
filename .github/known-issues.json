@@ -106,8 +106,7 @@
     "projectPatterns": [
       "guacamole-client",
       "logging-log4j-samples",
-      "netbeans-html4j",
-      "camel-quarkus"
+      "netbeans-html4j"
     ]
   },
   {
@@ -190,7 +189,8 @@
     ],
     "projectPatterns": [
       "ctakes",
-      "incubator-kie-optaplanner-quickstarts"
+      "hbase-filesystem",
+      "incubator-kie-optaplanner"
     ]
   },
   {
@@ -260,6 +260,7 @@
       "is missing"
     ],
     "projectPatterns": [
+      "druid",
       "incubator-seata"
     ]
   },
@@ -273,5 +274,76 @@
     "projectPatterns": [
       "openmeetings"
     ]
+  },
+  {
+    "id": "invalid-collect-request",
+    "description": "Maven 4 rejects dependency resolution when transitive dependencies have uninterpolated ${...} version expressions, causing 'Invalid Collect Request: null'",
+    "errorPatterns": [
+      "Invalid Collect Request"
+    ],
+    "projectPatterns": []
+  },
+  {
+    "id": "uninterpolated-expression-in-pom",
+    "description": "Maven 4's stricter POM validation rejects uninterpolated ${...} expressions in repository URLs, distribution management IDs, and other POM fields that Maven 3 silently accepted",
+    "errorPatterns": [
+      "contains an uninterpolated expression"
+    ],
+    "projectPatterns": []
+  },
+  {
+    "id": "shade-plugin-parent-cycle",
+    "description": "maven-shade-plugin's dependency-reduced-pom.xml causes 'The parents form a cycle' error in Maven 4's stricter model builder",
+    "errorPatterns": [
+      "The parents form a cycle"
+    ],
+    "projectPatterns": []
+  },
+  {
+    "id": "non-parseable-pom-transitive",
+    "description": "Maven 4's stricter XML parser rejects transitive POMs with invalid XML (illegal processing instructions, undeclared namespace prefixes) that Maven 3 tolerated",
+    "errorPatterns": [
+      "Non-parseable POM"
+    ],
+    "projectPatterns": [
+      "directory-fortress-",
+      "ranger"
+    ]
+  },
+  {
+    "id": "cyclonedx-ci-friendly-version",
+    "description": "cyclonedx-maven-plugin fails with 'Invalid Version Range Request' when project uses ${revision} CI-friendly versions",
+    "errorPatterns": [
+      "cyclonedx-maven-plugin",
+      "Invalid Version Range Request"
+    ],
+    "projectPatterns": []
+  },
+  {
+    "id": "develocity-extension-slf4j",
+    "description": "Develocity Maven extension fails to initialize under Maven 4 due to SLF4J classloading changes — ClassNotFoundException: org.slf4j.impl.SimpleLogger",
+    "errorPatterns": [
+      "Develocity Maven extension",
+      "SimpleLogger"
+    ],
+    "projectPatterns": []
+  },
+  {
+    "id": "spotless-pom-format-after-mvnup",
+    "description": "spotless-maven-plugin format check fails because mvnup POM modifications change formatting that spotless enforces",
+    "errorPatterns": [
+      "spotless-maven-plugin",
+      "format violations"
+    ],
+    "projectPatterns": []
+  },
+  {
+    "id": "sortpom-after-mvnup",
+    "description": "sortpom-maven-plugin verify fails because mvnup POM modifications change the order/content that sortpom enforces",
+    "errorPatterns": [
+      "sortpom-maven-plugin",
+      "is not sorted"
+    ],
+    "projectPatterns": []
   }
 ]
