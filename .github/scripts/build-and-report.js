@@ -33,6 +33,31 @@ function matchKnownIssue(repo, buildError) {
   return null;
 }
 
+/**
+ * Returns true if the build error output indicates a transient network failure
+ * (HTTP timeouts, connection resets, transfer failures to Maven Central, etc.)
+ * that is likely to succeed on retry.
+ */
+function isTransientNetworkError(errorOutput) {
+  if (!errorOutput) return false;
+  const s = String(errorOutput);
+  const patterns = [
+    'HTTP connect timed out',
+    'Read timed out',
+    'Connection reset',
+    'Connection refused',
+    'Could not transfer artifact',
+    'Could not transfer metadata',
+    'SocketTimeoutException',
+    'ConnectTimeoutException',
+    'NoRouteToHostException',
+    'UnknownHostException'
+  ];
+  // Only retry if the error is clearly network-related — check that at least
+  // one timeout/transfer pattern appears AND points to a well-known repo.
+  return patterns.some(p => s.includes(p));
+}
+
 async function runMaven3Build() {
   let maven3Success = false;
   let maven3Output = '';
@@ -113,12 +138,32 @@ async function runMaven3Build() {
     //   -Drat.skip          — Apache RAT license header checks
     //   -Dmaven.javadoc.skip — Javadoc generation (locale/encoding errors)
     //   -Dcheckstyle.skip    — Checkstyle (style-only, not build correctness)
-    const maven3BuildOutput = execSync(`${maven3Command} -V -B -e package -DskipTests -Drat.skip=true -Dmaven.javadoc.skip=true -Dcheckstyle.skip=true -Dmaven.repo.local=\${HOME}/.m2/repository-m3 2>&1`, {
-      encoding: 'utf8',
-      cwd: process.cwd() + '/project',
-      timeout: 3600000, // 60 minutes timeout
-      maxBuffer: 50 * 1024 * 1024 // 50 MB
-    });
+    const maven3Cmd = `${maven3Command} -V -B -e package -DskipTests -Drat.skip=true -Dmaven.javadoc.skip=true -Dcheckstyle.skip=true -Dmaven.repo.local=\${HOME}/.m2/repository-m3 2>&1`;
+    let maven3BuildOutput;
+    try {
+      maven3BuildOutput = execSync(maven3Cmd, {
+        encoding: 'utf8',
+        cwd: process.cwd() + '/project',
+        timeout: 3600000,
+        maxBuffer: 50 * 1024 * 1024
+      });
+    } catch (firstAttemptError) {
+      const firstOutput = firstAttemptError.stdout || firstAttemptError.stderr
+        || (firstAttemptError.output && firstAttemptError.output.filter(o => o).join('\n'))
+        || firstAttemptError.message || '';
+      if (isTransientNetworkError(String(firstOutput))) {
+        console.log('Maven 3.x build failed with transient network error, retrying in 30s...');
+        await new Promise(resolve => setTimeout(resolve, 30000));
+        maven3BuildOutput = execSync(maven3Cmd, {
+          encoding: 'utf8',
+          cwd: process.cwd() + '/project',
+          timeout: 3600000,
+          maxBuffer: 50 * 1024 * 1024
+        });
+      } else {
+        throw firstAttemptError;
+      }
+    }
     maven3Success = true;
     maven3Output = maven3VersionInfo;
     maven3Error = maven3BuildOutput; // For successful builds, this contains the build log
@@ -272,12 +317,32 @@ async function runMaven4Build() {
     }
 
     console.log('Running Maven 4.x build...');
-    const buildOutput = execSync('mvn -V -B -e clean package -DskipTests -Drat.skip=true -Dmaven.javadoc.skip=true -Dcheckstyle.skip=true -Dmaven.repo.local=${HOME}/.m2/repository-m4 2>&1', {
-      encoding: 'utf8',
-      cwd: process.cwd() + '/project',
-      timeout: 3600000, // 60 minutes timeout
-      maxBuffer: 50 * 1024 * 1024 // 50 MB
-    });
+    const maven4Cmd = 'mvn -V -B -e clean package -DskipTests -Drat.skip=true -Dmaven.javadoc.skip=true -Dcheckstyle.skip=true -Dmaven.repo.local=${HOME}/.m2/repository-m4 2>&1';
+    let buildOutput;
+    try {
+      buildOutput = execSync(maven4Cmd, {
+        encoding: 'utf8',
+        cwd: process.cwd() + '/project',
+        timeout: 3600000,
+        maxBuffer: 50 * 1024 * 1024
+      });
+    } catch (firstAttemptError) {
+      const firstOutput = firstAttemptError.stdout || firstAttemptError.stderr
+        || (firstAttemptError.output && firstAttemptError.output.filter(o => o).join('\n'))
+        || firstAttemptError.message || '';
+      if (isTransientNetworkError(String(firstOutput))) {
+        console.log('Maven 4.x build failed with transient network error, retrying in 30s...');
+        await new Promise(resolve => setTimeout(resolve, 30000));
+        buildOutput = execSync(maven4Cmd, {
+          encoding: 'utf8',
+          cwd: process.cwd() + '/project',
+          timeout: 3600000,
+          maxBuffer: 50 * 1024 * 1024
+        });
+      } else {
+        throw firstAttemptError;
+      }
+    }
     buildSuccess = true;
     mavenOutput = versionInfo;
     buildError = buildOutput;
