@@ -142,6 +142,13 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Set up JDK 21 for Maven Resolver
+        if: github.event.inputs.resolver_branch_or_commit != ''
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
       - name: Build Maven Resolver (if specified)
         if: github.event.inputs.resolver_branch_or_commit != ''
         run: |
