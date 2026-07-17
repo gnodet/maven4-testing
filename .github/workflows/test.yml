@@ -16,6 +16,10 @@ on:
         description: 'Maven branch or commit to build and test (leave empty to test the specified version directly)'
         required: false
         default: ''
+      resolver_branch_or_commit:
+        description: 'Maven Resolver branch or commit to build before Maven (leave empty to use released resolver)'
+        required: false
+        default: ''
       chunk_number:
         description: 'Chunk number to test (or ALL for all chunks)'
         required: true
@@ -119,6 +123,7 @@ jobs:
               --ref '${{ github.ref_name }}' \
               -f maven_version='${{ github.event.inputs.maven_version }}' \
               -f maven_branch_or_commit='${{ github.event.inputs.maven_branch_or_commit }}' \
+              -f resolver_branch_or_commit='${{ github.event.inputs.resolver_branch_or_commit }}' \
               -f chunk_number=$i \
               -f build_id="$BUILD_ID"
           done
@@ -136,6 +141,39 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+
+      - name: Build Maven Resolver (if specified)
+        if: github.event.inputs.resolver_branch_or_commit != ''
+        run: |
+          RESOLVER_REF="${{ github.event.inputs.resolver_branch_or_commit }}"
+          echo "Building Maven Resolver from: $RESOLVER_REF"
+
+          # Download bootstrap Maven for building
+          wget -q https://archive.apache.org/dist/maven/maven-4/${{ github.event.inputs.maven_version }}/binaries/apache-maven-${{ github.event.inputs.maven_version }}-bin.tar.gz \
+            || wget -q https://dlcdn.apache.org/maven/maven-4/${{ github.event.inputs.maven_version }}/binaries/apache-maven-${{ github.event.inputs.maven_version }}-bin.tar.gz
+          tar xzf apache-maven-${{ github.event.inputs.maven_version }}-bin.tar.gz
+          BOOTSTRAP_MVN="$GITHUB_WORKSPACE/apache-maven-${{ github.event.inputs.maven_version }}/bin/mvn"
+
+          git clone https://github.com/apache/maven-resolver.git resolver-source
+          cd resolver-source
+
+          # Check for fork reference (owner/repo:branch)
+          if [[ "$RESOLVER_REF" == *:* ]]; then
+            FORK_REPO="${RESOLVER_REF%%:*}"
+            FORK_BRANCH="${RESOLVER_REF#*:}"
+            git remote add fork "https://github.com/$FORK_REPO.git"
+            git fetch fork "$FORK_BRANCH"
+            git checkout "fork/$FORK_BRANCH"
+          elif [[ "$RESOLVER_REF" == pull/* ]]; then
+            git fetch origin "$RESOLVER_REF"
+            git checkout FETCH_HEAD
+          else
+            git checkout "$RESOLVER_REF"
+          fi
+
+          echo "Building Maven Resolver..."
+          "$BOOTSTRAP_MVN" install -DskipTests -Dmaven.test.skip=true -B -q
+          echo "Maven Resolver built and installed to local repo"
 
       - name: Build Maven from branch/commit
         id: build-info
