@@ -104,6 +104,7 @@
       "maven-enforcer-plugin"
     ],
     "projectPatterns": [
+      "camel-quarkus",
       "guacamole-client",
       "logging-log4j-samples",
       "netbeans-html4j"
@@ -142,7 +143,6 @@
       "RepositorySystem"
     ],
     "projectPatterns": [
-      "camel-k-runtime",
       "camel-performance-tests",
       "incubator-kie-optaplanner-quickstarts"
     ]
@@ -345,5 +345,50 @@
       "is not sorted"
     ],
     "projectPatterns": []
+  },
+  {
+    "id": "duplicated-pom-tag",
+    "description": "Maven 4's stricter POM parser rejects duplicate XML elements (artifactId, properties, etc.) that Maven 3 silently accepted — project POMs need to be fixed",
+    "errorPatterns": [
+      "Duplicated tag"
+    ],
+    "projectPatterns": []
+  },
+  {
+    "id": "duplicate-dependency-declarations",
+    "description": "Maven 4's stricter POM validation rejects duplicate dependency declarations (same groupId:artifactId) that Maven 3 silently merged",
+    "errorPatterns": [
+      "must be unique"
+    ],
+    "projectPatterns": []
+  },
+  {
+    "id": "old-scala-tools-plugin",
+    "description": "Ancient org.scala-tools:maven-scala-plugin (unmaintained since 2011) calls add() on immutable lists returned by Maven 4 API — projects should migrate to net.alchim31.maven:scala-maven-plugin",
+    "errorPatterns": [
+      "maven-scala-plugin",
+      "UnsupportedOperationException"
+    ],
+    "projectPatterns": []
+  },
+  {
+    "id": "pgpverify-resolver-classcast",
+    "description": "pgpverify-maven-plugin < 1.20 hits ClassCastException with Maven 4's resolver re-entrancy marker in RequestTrace — resolver regression being tracked",
+    "url": "https://github.com/apache/maven-resolver/pull/1957",
+    "errorPatterns": [
+      "pgpverify-maven-plugin",
+      "DefaultRepositorySystem"
+    ],
+    "projectPatterns": []
+  },
+  {
+    "id": "enforcer-pom-element-ordering",
+    "description": "Maven 4's model builder reorders POM elements into a canonical order that differs from source, breaking enforcer rules that check element ordering",
+    "errorPatterns": [
+      "maven-enforcer-plugin"
+    ],
+    "projectPatterns": [
+      "wicket"
+    ]
   }
 ]
