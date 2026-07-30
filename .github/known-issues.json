@@ -390,5 +390,23 @@
     "projectPatterns": [
       "wicket"
     ]
+  },
+  {
+    "id": "jar-plugin-duplicate-execution",
+    "description": "Projects with multiple maven-jar-plugin executions producing the same unclassified artifact (e.g. prepare-jar + default-jar) fail after mvnup upgrades from 2.x to 3.x+ — the projectHasAlreadySetAnArtifact() check added in 3.0.0 rejects the second execution. This is a project-side issue, not a Maven 4 bug.",
+    "errorPatterns": [
+      "maven-jar-plugin",
+      "classifier to attach supplemental artifacts"
+    ],
+    "projectPatterns": []
+  },
+  {
+    "id": "werror-bootstrap-classpath",
+    "description": "Projects using -Werror with -source 8 fail because javac emits 'bootstrap class path not set in conjunction with -source 8' warning when cross-compiling without a bootclasspath — project-side issue, not Maven 4 specific",
+    "errorPatterns": [
+      "-Werror specified",
+      "bootstrap class path not set"
+    ],
+    "projectPatterns": []
   }
 ]
