@@ -297,6 +297,7 @@ jobs:
         run: |
           # Default to JDK 17 (minimum for Maven 4)
           JDK_VERSION="17"
+          PROJECT_JDK=""
           TOOLCHAIN_JDK=""
 
           # Map a detected version to the nearest available JDK (8, 11, 17, 21, 25)
@@ -310,15 +311,24 @@ jobs:
             fi
           }
 
-          # Update JDK_VERSION if the candidate is higher
+          # Update JDK_VERSION (for Maven 4) and PROJECT_JDK (for Maven 3)
           update_jdk() {
             local candidate="$1"
             local source="$2"
             if [ -n "$candidate" ] && [ "$candidate" -gt "0" ] 2>/dev/null; then
               local mapped=$(map_to_available_jdk "$candidate")
-              # Compare as integers
-              local current_num=$(echo "$JDK_VERSION" | grep -oE '[0-9]+')
               local mapped_num=$(echo "$mapped" | grep -oE '[0-9]+')
+              # Track project JDK — the actual JDK the project needs (no Maven 4 floor)
+              if [ -z "$PROJECT_JDK" ]; then
+                PROJECT_JDK="$mapped"
+              else
+                local proj_num=$(echo "$PROJECT_JDK" | grep -oE '[0-9]+')
+                if [ "$mapped_num" -gt "$proj_num" ] 2>/dev/null; then
+                  PROJECT_JDK="$mapped"
+                fi
+              fi
+              # Track Maven 4 JDK (floored at 17 later)
+              local current_num=$(echo "$JDK_VERSION" | grep -oE '[0-9]+')
               if [ "$mapped_num" -gt "$current_num" ] 2>/dev/null; then
                 echo "  $source=$candidate -> JDK $mapped" >&2
                 JDK_VERSION="$mapped"
@@ -412,8 +422,15 @@ jobs:
             JDK_VERSION="17"
           fi
 
-          echo "Final JDK version: $JDK_VERSION"
+          # Project JDK: the actual JDK the project needs (no Maven 4 floor)
+          # Used for Maven 3 baseline build and as toolchain for Maven 4
+          if [ -z "$PROJECT_JDK" ]; then
+            PROJECT_JDK="$JDK_VERSION"
+          fi
+
+          echo "Final JDK version: $JDK_VERSION (Maven 4), Project JDK: $PROJECT_JDK (Maven 3)"
           echo "jdk-version=$JDK_VERSION" >> $GITHUB_OUTPUT
+          echo "project-jdk=$PROJECT_JDK" >> $GITHUB_OUTPUT
 
           # Report toolchain JDK if different from main JDK
           if [ -n "$TOOLCHAIN_JDK" ]; then
@@ -421,19 +438,43 @@ jobs:
             echo "toolchain-jdk=$TOOLCHAIN_JDK" >> $GITHUB_OUTPUT
           fi
 
-      # Install toolchain JDK first (if needed) so setup-java doesn't overwrite JAVA_HOME
+      # Install project JDK for Maven 3 build (if lower than Maven 4 JDK)
+      - name: Set up project JDK ${{ steps.detect-jdk.outputs.project-jdk }}
+        if: steps.detect-jdk.outputs.project-jdk != steps.detect-jdk.outputs.jdk-version
+        uses: actions/setup-java@v5
+        with:
+          java-version: ${{ steps.detect-jdk.outputs.project-jdk }}
+          distribution: 'temurin'
+
+      # Install toolchain JDK (if needed and different from project JDK)
       - name: Set up toolchain JDK ${{ steps.detect-jdk.outputs.toolchain-jdk }}
-        if: steps.detect-jdk.outputs.toolchain-jdk != ''
+        if: steps.detect-jdk.outputs.toolchain-jdk != '' && steps.detect-jdk.outputs.toolchain-jdk != steps.detect-jdk.outputs.project-jdk
         uses: actions/setup-java@v5
         with:
           java-version: ${{ steps.detect-jdk.outputs.toolchain-jdk }}
           distribution: 'temurin'
 
+      # Main JDK last — JAVA_HOME will point here (Maven 4 needs 17+)
       - name: Set up JDK ${{ steps.detect-jdk.outputs.jdk-version }}
         uses: actions/setup-java@v5
         with:
           java-version: ${{ steps.detect-jdk.outputs.jdk-version }}
           distribution: 'temurin'
+
+      - name: Export project JDK home
+        if: steps.detect-jdk.outputs.project-jdk != steps.detect-jdk.outputs.jdk-version
+        run: |
+          PROJECT_JDK_VER="${{ steps.detect-jdk.outputs.project-jdk }}"
+          for jdk_dir in /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/*/x64; do
+            if [ -x "$jdk_dir/bin/java" ]; then
+              MAJOR=$("$jdk_dir/bin/java" -version 2>&1 | head -1 | grep -oE '"([0-9]+)' | grep -oE '[0-9]+')
+              if [ "$MAJOR" = "$PROJECT_JDK_VER" ]; then
+                echo "PROJECT_JDK_HOME=$jdk_dir" >> $GITHUB_ENV
+                echo "Found project JDK $PROJECT_JDK_VER at $jdk_dir"
+                break
+              fi
+            fi
+          done
 
       - name: Generate toolchains.xml
         run: |

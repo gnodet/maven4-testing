@@ -63,6 +63,15 @@ async function runMaven3Build() {
   let maven3Output = '';
   let maven3Error = '';
 
+  // Use project JDK for Maven 3 if available (may be lower than JDK 17 required by Maven 4)
+  const projectJdkHome = process.env.PROJECT_JDK_HOME;
+  const maven3Env = projectJdkHome
+    ? { ...process.env, JAVA_HOME: projectJdkHome, PATH: `${projectJdkHome}/bin:${process.env.PATH}` }
+    : process.env;
+  if (projectJdkHome) {
+    console.log(`Using project JDK for Maven 3 build: ${projectJdkHome}`);
+  }
+
   // Early exit: skip projects with no pom.xml at root — these are sub-repos,
   // retired projects, or repos that use a different build system entirely.
   const projectPomPath = path.join(process.cwd(), 'project', 'pom.xml');
@@ -83,7 +92,7 @@ async function runMaven3Build() {
     try {
       execSync('test -f project/mvnw');
       console.log('Found Maven wrapper, checking version...');
-      const wrapperVersion = execSync('./mvnw -version 2>&1', { encoding: 'utf8', cwd: process.cwd() + '/project' });
+      const wrapperVersion = execSync('./mvnw -version 2>&1', { encoding: 'utf8', cwd: process.cwd() + '/project', env: maven3Env });
       if (wrapperVersion.includes('Apache Maven 3.')) {
         console.log('Maven wrapper is configured for Maven 3.x, using it');
         maven3Command = './mvnw';
@@ -102,7 +111,7 @@ async function runMaven3Build() {
       maven3Command = `${process.env.GITHUB_WORKSPACE}/apache-maven-3.9.9/bin/mvn`;
     }
 
-    const maven3VersionInfo = execSync(`${maven3Command} -version 2>&1`, { encoding: 'utf8', cwd: process.cwd() + '/project' });
+    const maven3VersionInfo = execSync(`${maven3Command} -version 2>&1`, { encoding: 'utf8', cwd: process.cwd() + '/project', env: maven3Env });
 
     // Fix HTTP repository URLs that are blocked by Maven 3.8.1+.
     // Since Maven 3.8.1, http:// repositories are blocked by default (CVE-2021-26291).
@@ -145,7 +154,8 @@ async function runMaven3Build() {
         encoding: 'utf8',
         cwd: process.cwd() + '/project',
         timeout: 3600000,
-        maxBuffer: 50 * 1024 * 1024
+        maxBuffer: 50 * 1024 * 1024,
+        env: maven3Env
       });
     } catch (firstAttemptError) {
       const firstOutput = firstAttemptError.stdout || firstAttemptError.stderr
@@ -158,7 +168,8 @@ async function runMaven3Build() {
           encoding: 'utf8',
           cwd: process.cwd() + '/project',
           timeout: 3600000,
-          maxBuffer: 50 * 1024 * 1024
+          maxBuffer: 50 * 1024 * 1024,
+          env: maven3Env
         });
       } else {
         throw firstAttemptError;
