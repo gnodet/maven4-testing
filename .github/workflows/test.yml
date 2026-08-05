@@ -307,6 +307,16 @@ jobs:
           PROJECT_JDK=""
           TOOLCHAIN_JDK=""
 
+          # Check for per-project JDK override (e.g. projects with runtime reflection issues)
+          REPO_NAME="${{ matrix.repository }}"
+          if [ -f "jdk-overrides.json" ]; then
+            OVERRIDE=$(python3 -c "import json,sys; d=json.load(open('jdk-overrides.json')); print(d.get('$REPO_NAME',''))" 2>/dev/null || true)
+            if [ -n "$OVERRIDE" ]; then
+              echo "JDK override found for $REPO_NAME: JDK $OVERRIDE"
+              PROJECT_JDK="$OVERRIDE"
+            fi
+          fi
+
           # Map a detected version to the nearest available JDK (8, 11, 17, 21, 25)
           map_to_available_jdk() {
             local v="$1"

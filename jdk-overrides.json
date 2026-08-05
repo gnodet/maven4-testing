@@ -1,0 +1,5 @@
+{
+  "_comment": "Projects that need a specific JDK version that cannot be auto-detected from pom.xml. Key is the repo name (as used in chunk files), value is the JDK version (8, 11, 17, 21, 25).",
+  "mina-vysper": "8",
+  "mina-asyncweb": "8"
+}
