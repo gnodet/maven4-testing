@@ -371,6 +371,18 @@ jobs:
             update_jdk "$COMPILER_SOURCE" "maven.compiler.source"
             update_jdk "$COMPILER_TARGET" "maven.compiler.target"
 
+            # Check compiler plugin <configuration> for <source>, <target>, <release>
+            # Many older projects set these directly in the plugin config rather than as properties
+            PLUGIN_SECTION=$(grep -A 40 "maven-compiler-plugin" "$pom_file" || true)
+            if [ -n "$PLUGIN_SECTION" ]; then
+              PLUGIN_SOURCE=$(echo "$PLUGIN_SECTION" | grep -oE '<source>[0-9.]+</source>' | grep -oE '[0-9.]+' | sed 's/^1\.//' | head -1 || true)
+              PLUGIN_TARGET=$(echo "$PLUGIN_SECTION" | grep -oE '<target>[0-9.]+</target>' | grep -oE '[0-9.]+' | sed 's/^1\.//' | head -1 || true)
+              PLUGIN_RELEASE=$(echo "$PLUGIN_SECTION" | grep -oE '<release>[0-9]+</release>' | grep -oE '[0-9]+' | head -1 || true)
+              update_jdk "$PLUGIN_RELEASE" "compiler-plugin release"
+              update_jdk "$PLUGIN_SOURCE" "compiler-plugin source"
+              update_jdk "$PLUGIN_TARGET" "compiler-plugin target"
+            fi
+
             # Check for java.version and minimalJavaBuildVersion properties
             JAVA_VERSION_PROP=$(grep -oE '<java\.version>[^<]+' "$pom_file" | grep -oE '[0-9]+' | tail -1 || true)
             update_jdk "$JAVA_VERSION_PROP" "java.version"
