@@ -423,6 +423,12 @@ async function runMaven4Build() {
 }
 
 async function createOrUpdateIndividualProjectIssue(github, context, repo, maven3Success, maven3Output, maven3Error, buildSuccess, mavenOutput, buildError, mvnupOutput, mavenVersion, mavenBranchOrCommit, chunkNumber, timingInfo) {
+  // Skip issue creation for repos without pom.xml — these aren't Maven projects
+  if (!maven3Success && maven3Output === 'No pom.xml found') {
+    console.log(`Skipping issue creation for ${repo} — no pom.xml at project root`);
+    return { issueNumber: null, status: '⏭️ Skipped (no pom.xml)', knownIssue: null };
+  }
+
   // Determine overall status
   let overallStatus;
   let knownIssue = null;
@@ -1045,6 +1051,12 @@ module.exports = async function(github, context) {
   const { issueNumber, status, knownIssue } = await createOrUpdateIndividualProjectIssue(
     github, context, repo, maven3Success, maven3Output, maven3Error, buildSuccess, mavenOutput, buildError, mvnupOutput, mavenVersion, mavenBranchOrCommit, chunkNumber, timingInfo
   );
+
+  // Skip summary update and issue tracking for non-Maven projects (no pom.xml)
+  if (issueNumber === null) {
+    console.log(`Skipping summary update for ${repo} — not a Maven project`);
+    return;
+  }
 
   // Add delay to prevent GitHub rate limiting (2.5 seconds)
   console.log('Adding delay to prevent rate limiting...');
