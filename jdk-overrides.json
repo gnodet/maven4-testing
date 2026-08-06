@@ -1,0 +1,18 @@
+{
+  "_comment": "Projects that need a specific JDK version that cannot be auto-detected from pom.xml. Key is the repo name (as used in chunk files), value is the JDK version (8, 11, 17, 21, 25). Typical reasons: source level 5/6 (need JDK 8), Nashorn/JavaScript (need JDK 11), reflection access (need JDK 8/11).",
+  "servicemix4-nmr": "8",
+  "servicemix4-specs": "8",
+  "manifoldcf-integration-elasticsearch": "8",
+  "maven-2": "8",
+  "maven-ant-tasks": "8",
+  "sirona": "8",
+  "directmemory": "8",
+  "mina-asyncweb": "8",
+  "mina": "8",
+  "ftpserver": "8",
+  "geronimo-genesis": "8",
+  "geronimo-gshell": "8",
+  "sling-maven-launchpad-plugin": "11",
+  "sling-org-apache-sling-datasource": "11",
+  "sling-org-apache-sling-extensions-classloader-leak-detector": "11"
+}
