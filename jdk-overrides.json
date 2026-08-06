@@ -9,6 +9,7 @@
   "directmemory": "8",
   "mina-asyncweb": "8",
   "mina": "8",
+  "mina-vysper": "8",
   "ftpserver": "8",
   "geronimo-genesis": "8",
   "geronimo-gshell": "8",

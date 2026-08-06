@@ -218,12 +218,19 @@ jobs:
             git remote add fork "https://github.com/$FORK_REPO.git"
             git fetch fork "$FORK_BRANCH"
             git checkout "fork/$FORK_BRANCH"
-          # Split refs by '+' and process each one
+          # Split refs by '+' — first ref is the base (checked out), rest are merged on top
+          # Examples: maven-4.0.x+pull/12633/head, master+pull/123/head+pull/456/head
           elif [[ "$MAVEN_REF" == *+* ]]; then
             IFS='+' read -ra REFS <<< "$MAVEN_REF"
-            echo "Multiple refs detected — merging ${#REFS[@]} refs onto master"
-            git checkout master
-            for ref in "${REFS[@]}"; do
+            BASE_REF=$(echo "${REFS[0]}" | xargs)
+            echo "Multiple refs detected — checking out base '$BASE_REF', merging ${#REFS[@]} ref(s) on top"
+            if [[ "$BASE_REF" == pull/* ]]; then
+              git fetch origin "$BASE_REF"
+              git checkout FETCH_HEAD -b build-branch
+            else
+              git checkout "$BASE_REF"
+            fi
+            for ref in "${REFS[@]:1}"; do
               ref=$(echo "$ref" | xargs)  # trim whitespace
               echo "Merging ref: $ref"
               if [[ "$ref" == pull/* ]]; then
