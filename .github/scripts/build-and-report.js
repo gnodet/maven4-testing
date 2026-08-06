@@ -134,11 +134,13 @@ async function runMaven3Build() {
 
     console.log('Running Maven 3.x build...');
     // Run Maven build and capture output
-    // Skip lint/doc checks that are irrelevant to Maven compatibility testing:
+    // Skip lint/doc/policy checks that are irrelevant to Maven compatibility testing:
     //   -Drat.skip          — Apache RAT license header checks
     //   -Dmaven.javadoc.skip — Javadoc generation (locale/encoding errors)
     //   -Dcheckstyle.skip    — Checkstyle (style-only, not build correctness)
-    const maven3Cmd = `${maven3Command} -V -B -e package -DskipTests -Drat.skip=true -Dmaven.javadoc.skip=true -Dcheckstyle.skip=true -Dmaven.repo.local=\${HOME}/.m2/repository-m3 2>&1`;
+    //   -Denforcer.skip      — Enforcer rules (JDK/Maven version gates, banned deps)
+    //   -Dspotless.check.skip — Spotless code formatter checks
+    const maven3Cmd = `${maven3Command} -V -B -e package -DskipTests -Drat.skip=true -Dmaven.javadoc.skip=true -Dcheckstyle.skip=true -Denforcer.skip=true -Dspotless.check.skip=true -Dmaven.repo.local=\${HOME}/.m2/repository-m3 2>&1`;
     let maven3BuildOutput;
     try {
       maven3BuildOutput = execSync(maven3Cmd, {
@@ -317,7 +319,7 @@ async function runMaven4Build() {
     }
 
     console.log('Running Maven 4.x build...');
-    const maven4Cmd = 'mvn -V -B -e clean package -DskipTests -Drat.skip=true -Dmaven.javadoc.skip=true -Dcheckstyle.skip=true -Dspotless.check.skip=true -Dsort.skip=true -Dmaven.repo.local=${HOME}/.m2/repository-m4 2>&1';
+    const maven4Cmd = 'mvn -V -B -e clean package -DskipTests -Drat.skip=true -Dmaven.javadoc.skip=true -Dcheckstyle.skip=true -Denforcer.skip=true -Dspotless.check.skip=true -Dsort.skip=true -Dmaven.repo.local=${HOME}/.m2/repository-m4 2>&1';
     let buildOutput;
     try {
       buildOutput = execSync(maven4Cmd, {

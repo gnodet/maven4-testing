@@ -398,12 +398,18 @@ jobs:
             return 1
           }
 
-          # Check project POM and parent POM
+          # Check project POM, parent POM, and submodule POMs for JDK requirements
           if [ -f "project/pom.xml" ]; then
             check_pom_for_jdk "project/pom.xml"
             if download_parent_pom "project/pom.xml"; then
               check_pom_for_jdk "parent-pom.xml"
             fi
+            # Also scan submodule POMs (max depth 3) for JDK requirements
+            # that may not appear in root/parent POM (e.g. enforcer rules,
+            # maven.compiler.release in a submodule)
+            for sub_pom in $(find project -name pom.xml -maxdepth 4 -not -path "project/pom.xml" 2>/dev/null | head -20); do
+              check_pom_for_jdk "$sub_pom"
+            done
           fi
 
           # Maven 4 requires JDK 17+, so enforce minimum
