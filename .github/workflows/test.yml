@@ -421,14 +421,28 @@ jobs:
             echo "toolchain-jdk=$TOOLCHAIN_JDK" >> $GITHUB_OUTPUT
           fi
 
-      # Install toolchain JDK first (if needed) so setup-java doesn't overwrite JAVA_HOME
+      # Install JDK 8 and 11 as toolchain JDKs so auto-toolchain selection can find them
+      - name: Set up JDK 8 (toolchain)
+        uses: actions/setup-java@v5
+        with:
+          java-version: '8'
+          distribution: 'temurin'
+
+      - name: Set up JDK 11 (toolchain)
+        uses: actions/setup-java@v5
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
+      # Install additional toolchain JDK if needed (e.g. JDK 21 or 25)
       - name: Set up toolchain JDK ${{ steps.detect-jdk.outputs.toolchain-jdk }}
-        if: steps.detect-jdk.outputs.toolchain-jdk != ''
+        if: steps.detect-jdk.outputs.toolchain-jdk != '' && steps.detect-jdk.outputs.toolchain-jdk != '8' && steps.detect-jdk.outputs.toolchain-jdk != '11'
         uses: actions/setup-java@v5
         with:
           java-version: ${{ steps.detect-jdk.outputs.toolchain-jdk }}
           distribution: 'temurin'
 
+      # Install the main JDK last so it sets JAVA_HOME
       - name: Set up JDK ${{ steps.detect-jdk.outputs.jdk-version }}
         uses: actions/setup-java@v5
         with:
