@@ -119,7 +119,7 @@ async function runMaven3Build() {
     // We rewrite these to https:// before the build to avoid false-positive failures.
     try {
       const httpFixCount = execSync(
-        `find project -name pom.xml -exec grep -l 'http://repo\\|http://repository\\|http://snapshots\\|http://people.apache' {} \\; 2>/dev/null | head -50`,
+        `find project -name pom.xml -exec grep -l 'http://repo\\|http://repository\\|http://snapshots\\|http://people.apache\\|http://oss\\.sonatype\\|http://maven\\.restlet\\|http://dl\\.bintray\\|http://repository\\.springsource\\|http://repo\\.spring\\|http://svn\\.apache\\|http://www\\.mvnsearch' {} \\; 2>/dev/null | head -50`,
         { encoding: 'utf8', cwd: process.cwd() }
       ).trim();
       if (httpFixCount) {
@@ -132,6 +132,13 @@ async function runMaven3Build() {
           `-e 's|http://snapshots\\.repository\\.codehaus\\.org|https://repository.codehaus.org|g' ` +
           `-e 's|http://people\\.apache\\.org|https://people.apache.org|g' ` +
           `-e 's|http://www\\.ibiblio\\.org/maven2|https://repo.maven.apache.org/maven2|g' ` +
+          `-e 's|http://oss\\.sonatype\\.org|https://oss.sonatype.org|g' ` +
+          `-e 's|http://svn\\.apache\\.org|https://svn.apache.org|g' ` +
+          `-e 's|http://repo\\.spring\\.io|https://repo.spring.io|g' ` +
+          `-e 's|http://repository\\.springsource\\.com|https://repo.spring.io|g' ` +
+          `-e 's|http://maven\\.restlet\\.org|https://maven.restlet.talend.com|g' ` +
+          `-e 's|http://dl\\.bintray\\.com|https://dl.bintray.com|g' ` +
+          `-e 's|http://www\\.mvnsearch\\.org|https://repo.maven.apache.org|g' ` +
           `{} \\;`,
           { encoding: 'utf8', cwd: process.cwd(), timeout: 60000 }
         );

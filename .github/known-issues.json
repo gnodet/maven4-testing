@@ -11,22 +11,30 @@
     ]
   },
   {
-    "id": "scala-maven-plugin#911",
-    "description": "scala-maven-plugin < 4.9.5 calls add() on immutable lists returned by Maven 4 API",
-    "url": "https://github.com/davidB/scala-maven-plugin/commit/e6d922eb",
+    "id": "nashorn-javascript-engine",
+    "description": "Sling parent POM uses maven-antrun-plugin with JavaScript (Nashorn engine) for set-bundle-required-execution-environment — Nashorn was removed in JDK 15. These projects need JDK ≤ 14 to build, or the antrun execution needs to be rewritten.",
     "errorPatterns": [
-      "scala-maven-plugin",
-      "UnsupportedOperationException"
+      "Unable to create javax script engine for javascript"
+    ],
+    "projectPatterns": [
+      "sling-"
+    ]
+  },
+  {
+    "id": "maven-bundle-plugin-cme",
+    "description": "maven-bundle-plugin hits ConcurrentModificationException under Maven 4 — likely due to concurrent access to project dependency collections with Maven 4's parallel-capable model",
+    "errorPatterns": [
+      "maven-bundle-plugin",
+      "ConcurrentModificationException"
     ],
     "projectPatterns": []
   },
   {
-    "id": "beta-plugin-api-break",
-    "description": "Maven plugins at 4.0.0-beta-1 use removed API (ProjectManager methods renamed/removed before RC)",
-    "url": "https://github.com/apache/maven/issues/13666",
+    "id": "relative-parent-not-found",
+    "description": "Project's parent.relativePath points to a sibling repository (e.g. ../../parent, ../brooklyn-server) that isn't checked out — multi-repo project layout that can't be tested standalone",
     "errorPatterns": [
-      "4.0.0-beta-1",
-      "NoSuchMethodError"
+      "parent.relativePath",
+      "no POM could be found"
     ],
     "projectPatterns": []
   },
@@ -44,15 +52,6 @@
     "description": "Old Quarkus/plugin versions use ServiceLocator pattern removed in Maven 4",
     "errorPatterns": [
       "ServiceLocator"
-    ],
-    "projectPatterns": []
-  },
-  {
-    "id": "exec-plugin-getcontainer",
-    "description": "exec-maven-plugin < 3.2.0 calls MavenSession.getContainer() which returns null in Maven 4",
-    "errorPatterns": [
-      "exec-maven-plugin",
-      "getContainer"
     ],
     "projectPatterns": []
   },
@@ -189,6 +188,9 @@
     ],
     "projectPatterns": [
       "ctakes",
+      "directory-ldap-api",
+      "directory-server",
+      "dubbo-feature-test",
       "hbase-filesystem",
       "incubator-kie-optaplanner"
     ]
