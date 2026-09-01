@@ -15,5 +15,6 @@
   "geronimo-gshell": "8",
   "sling-maven-launchpad-plugin": "11",
   "sling-org-apache-sling-datasource": "11",
-  "sling-org-apache-sling-extensions-classloader-leak-detector": "11"
+  "sling-org-apache-sling-extensions-classloader-leak-detector": "11",
+  "hop": "21"
 }

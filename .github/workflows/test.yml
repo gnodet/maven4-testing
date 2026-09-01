@@ -380,10 +380,34 @@ jobs:
               fi
             fi
 
+            # Resolve a simple ${property.name} reference against the same POM
+            resolve_property() {
+              local value="$1"
+              local pom="$2"
+              if echo "$value" | grep -qE '^\$\{[^}]+\}$'; then
+                local prop_name=$(echo "$value" | sed 's/^\${//;s/}$//')
+                local resolved=$(grep -oE "<${prop_name}>[^<]+" "$pom" | sed "s/<${prop_name}>//" | head -1 || true)
+                if [ -n "$resolved" ]; then
+                  echo "$resolved"
+                  return
+                fi
+              fi
+              echo "$value"
+            }
+
             # Check maven.compiler.source/target/release properties
-            COMPILER_SOURCE=$(grep -oE '<maven\.compiler\.source>[^<]+' "$pom_file" | grep -oE '[0-9]+' | tail -1 || true)
-            COMPILER_TARGET=$(grep -oE '<maven\.compiler\.target>[^<]+' "$pom_file" | grep -oE '[0-9]+' | tail -1 || true)
-            COMPILER_RELEASE=$(grep -oE '<maven\.compiler\.release>[^<]+' "$pom_file" | grep -oE '[0-9]+' | tail -1 || true)
+            COMPILER_SOURCE_RAW=$(grep -oE '<maven\.compiler\.source>[^<]+' "$pom_file" | sed 's/<maven.compiler.source>//' | head -1 || true)
+            COMPILER_SOURCE_RESOLVED=$(resolve_property "$COMPILER_SOURCE_RAW" "$pom_file")
+            COMPILER_SOURCE=$(echo "$COMPILER_SOURCE_RESOLVED" | grep -oE '[0-9]+' | tail -1 || true)
+
+            COMPILER_TARGET_RAW=$(grep -oE '<maven\.compiler\.target>[^<]+' "$pom_file" | sed 's/<maven.compiler.target>//' | head -1 || true)
+            COMPILER_TARGET_RESOLVED=$(resolve_property "$COMPILER_TARGET_RAW" "$pom_file")
+            COMPILER_TARGET=$(echo "$COMPILER_TARGET_RESOLVED" | grep -oE '[0-9]+' | tail -1 || true)
+
+            COMPILER_RELEASE_RAW=$(grep -oE '<maven\.compiler\.release>[^<]+' "$pom_file" | sed 's/<maven.compiler.release>//' | head -1 || true)
+            COMPILER_RELEASE_RESOLVED=$(resolve_property "$COMPILER_RELEASE_RAW" "$pom_file")
+            COMPILER_RELEASE=$(echo "$COMPILER_RELEASE_RESOLVED" | grep -oE '[0-9]+' | tail -1 || true)
+
             update_jdk "$COMPILER_RELEASE" "maven.compiler.release"
             update_jdk "$COMPILER_SOURCE" "maven.compiler.source"
             update_jdk "$COMPILER_TARGET" "maven.compiler.target"
