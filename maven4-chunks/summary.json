@@ -1,11 +1,11 @@
 {
-  "total_repos": 966,
+  "total_repos": 948,
   "num_chunks": 4,
   "max_chunk_size": 250,
   "chunks": [
-    "chunk-1"
-,    "chunk-2"
-,    "chunk-3"
-,    "chunk-4"
+    "chunk-1",
+    "chunk-2",
+    "chunk-3",
+    "chunk-4"
   ]
 }
