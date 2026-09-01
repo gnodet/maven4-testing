@@ -410,5 +410,17 @@
       "bootstrap class path not set"
     ],
     "projectPatterns": []
+  },
+  {
+    "id": "maven-plugin-api-class-hierarchy",
+    "description": "Maven plugin projects fail to compile against Maven 4 API — MojoExecutionException not resolved as subclass of Throwable due to changed API jar structure. Project-side issue, closed as not planned (apache/maven#12990).",
+    "url": "https://github.com/apache/maven/issues/12990",
+    "errorPatterns": [
+      "MojoExecutionException",
+      "must be a subclass of Throwable"
+    ],
+    "projectPatterns": [
+      "dolphinscheduler-maven-plugin"
+    ]
   }
 ]
