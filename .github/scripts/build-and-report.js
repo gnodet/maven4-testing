@@ -1,6 +1,16 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const {
+  getMavenIdentifier,
+  getSummaryTitle,
+  findSummaryIssue,
+  extractSummaryInfo,
+  calculateStats,
+  countStatusesFromTable,
+  buildSummaryBody,
+  updateSummaryIssue
+} = require('./summary-utils');
 
 function loadKnownIssues() {
   try {
@@ -722,172 +732,58 @@ function extractFirstErrorLine(buildError, buildSuccess, maven3Error, maven3Succ
 }
 
 async function updateSummaryTable(github, context, repo, status, issueNumber, buildError, buildSuccess, maven3Error, maven3Success, mavenVersion, mavenBranchOrCommit, currentBuildId, knownIssue) {
-  const mavenIdentifier = mavenBranchOrCommit ? `${mavenBranchOrCommit} (built with ${mavenVersion})` : mavenVersion;
-  const summaryTitle = `Maven Compatibility Summary (${mavenIdentifier})`;
-  const summaryIssues = await github.rest.issues.listForRepo({
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-    state: 'all',
-    labels: 'maven4-summary'
-  });
+  const mavenIdentifier = getMavenIdentifier(mavenVersion, mavenBranchOrCommit);
 
-  const existingSummary = summaryIssues.data.find(issue => issue.title === summaryTitle);
+  const { issue: existingSummary, stale } = await findSummaryIssue(
+    github, context, mavenIdentifier, currentBuildId
+  );
 
-  // Double-check if this build is still the current one (backup check)
-  if (existingSummary && existingSummary.body) {
-    const buildIdMatch = existingSummary.body.match(/Build ID:\s*([^\n]+)/);
-    const summaryBuildId = buildIdMatch ? buildIdMatch[1].trim() : null;
-
-    if (summaryBuildId && summaryBuildId !== currentBuildId) {
-      console.log(`Build ID mismatch detected during summary update - this build (${currentBuildId}) is outdated. Current build: ${summaryBuildId}`);
-      console.log('Skipping summary update (this should have been caught earlier).');
-      return;
-    }
+  if (stale) {
+    console.log(`Build ID mismatch — this build (${currentBuildId}) is outdated. Skipping summary update.`);
+    return;
   }
 
   const issueUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/issues/${issueNumber}`;
 
-  // Process table update with first error line
+  // Merge this project's row into the existing table
   function processTableUpdate(currentBody, firstErrorLine) {
     const tableHeader = '|Project|Status|Details|Error|';
     const headerSeparator = '|---|---|---|---|';
     const newEntry = `|${repo}|${status}|[Details](${issueUrl})|${firstErrorLine}|`;
 
-    // Handle null or undefined currentBody, or freshly cleared summary
     if (!currentBody) {
       return `${tableHeader}\n${headerSeparator}\n${newEntry}`;
     }
 
-    // Split the body into lines
     const lines = currentBody.split('\n');
-
-    // Find the table in the content
     const tableStartIndex = lines.findIndex(line => line.startsWith('|Project|'));
     if (tableStartIndex === -1) {
-      // If no table exists, create a new one
       return `${tableHeader}\n${headerSeparator}\n${newEntry}`;
     }
 
-    // Get existing table rows (excluding header and separator)
     const tableRows = lines
-      .slice(tableStartIndex + 2) // Skip header and separator
-      .filter(line => line.trim() && line.startsWith('|')) // Only keep non-empty table rows
-      .map(line => {
-        // Ensure all rows end with | if they don't already
-        return line.endsWith('|') ? line : line + '|';
-      });
+      .slice(tableStartIndex + 2)
+      .filter(line => line.trim() && line.startsWith('|'))
+      .map(line => line.endsWith('|') ? line : line + '|');
 
-    // Extract project name from the new entry
-    const newProjectName = repo;
-
-    // Filter out any existing entries for the same project
     const filteredRows = tableRows.filter(row => {
       const projectName = row.split('|')[1].trim();
-      return projectName !== newProjectName;
+      return projectName !== repo;
     });
 
-    // Add the new entry and sort all rows
     const allRows = [...filteredRows, newEntry];
-    const sortedRows = allRows.sort((a, b) => {
+    allRows.sort((a, b) => {
       const aProject = a.split('|')[1].trim();
       const bProject = b.split('|')[1].trim();
       return aProject.localeCompare(bProject);
     });
 
-    // Reconstruct the table with header
-    return `${tableHeader}\n${headerSeparator}\n${sortedRows.join('\n')}`;
+    return `${tableHeader}\n${headerSeparator}\n${allRows.join('\n')}`;
   }
 
   const firstErrorLine = knownIssue
     ? `[${knownIssue.id}](${knownIssue.url})`
     : extractFirstErrorLine(buildError, buildSuccess, maven3Error, maven3Success);
-
-  // Extract total projects and start date from existing summary
-  function extractSummaryInfo(existingBody) {
-    if (!existingBody) {
-      return { totalProjects: 966, startDate: null }; // Default fallback
-    }
-
-    const totalMatch = existingBody.match(/\*\*Total Projects\*\*:\s*(\d+)/);
-    const startMatch = existingBody.match(/Started:\s*([^\n]+)/);
-
-    return {
-      totalProjects: totalMatch ? parseInt(totalMatch[1]) : 966,
-      startDate: startMatch ? startMatch[1] : null
-    };
-  }
-
-  // Calculate statistics from the updated table
-  function calculateStatistics(tableBody, totalProjects) {
-    const lines = tableBody.split('\n');
-    const tableStartIndex = lines.findIndex(line => line.startsWith('|Project|'));
-
-    if (tableStartIndex === -1) {
-      // No table exists yet, this is the first entry
-      const success = status === '✅ Success' ? 1 : 0;
-      const maven3Failed = status === '⚠️ Maven 3.x Failed' ? 1 : 0;
-      const maven4Failed = status === '❌ Maven 4.x Failed' ? 1 : 0;
-      const knownIssueCount = status === '🔶 Known Issue' ? 1 : 0;
-      const tested = 1;
-
-      return {
-        total: totalProjects,
-        tested: tested,
-        success: success,
-        maven3Failed: maven3Failed,
-        maven4Failed: maven4Failed,
-        knownIssue: knownIssueCount,
-        testedRatio: (tested / totalProjects * 100).toFixed(1),
-        successRatio: tested > 0 ? (success / tested * 100).toFixed(1) : '0.0',
-        maven3FailedRatio: tested > 0 ? (maven3Failed / tested * 100).toFixed(1) : '0.0',
-        maven4FailedRatio: tested > 0 ? (maven4Failed / tested * 100).toFixed(1) : '0.0',
-        knownIssueRatio: tested > 0 ? (knownIssueCount / tested * 100).toFixed(1) : '0.0'
-      };
-    }
-
-    // Get existing table rows (excluding header and separator)
-    const tableRows = lines
-      .slice(tableStartIndex + 2) // Skip header and separator
-      .filter(line => line.trim() && line.startsWith('|') && !line.includes('*Testing in progress*')) // Only keep non-empty table rows, exclude progress message
-      .map(line => line.endsWith('|') ? line : line + '|');
-
-    let success = 0;
-    let maven3Failed = 0;
-    let maven4Failed = 0;
-    let knownIssueCount = 0;
-
-    tableRows.forEach(row => {
-      const columns = row.split('|');
-      if (columns.length >= 3) {
-        const rowStatus = columns[2].trim();
-        if (rowStatus === '✅ Success') {
-          success++;
-        } else if (rowStatus === '⚠️ Maven 3.x Failed') {
-          maven3Failed++;
-        } else if (rowStatus === '❌ Maven 4.x Failed') {
-          maven4Failed++;
-        } else if (rowStatus === '🔶 Known Issue') {
-          knownIssueCount++;
-        }
-      }
-    });
-
-    const tested = success + maven3Failed + maven4Failed + knownIssueCount;
-
-    return {
-      total: totalProjects,
-      tested: tested,
-      success: success,
-      maven3Failed: maven3Failed,
-      maven4Failed: maven4Failed,
-      knownIssue: knownIssueCount,
-      testedRatio: (tested / totalProjects * 100).toFixed(1),
-      successRatio: tested > 0 ? (success / tested * 100).toFixed(1) : '0.0',
-      maven3FailedRatio: tested > 0 ? (maven3Failed / tested * 100).toFixed(1) : '0.0',
-      maven4FailedRatio: tested > 0 ? (maven4Failed / tested * 100).toFixed(1) : '0.0',
-      knownIssueRatio: tested > 0 ? (knownIssueCount / tested * 100).toFixed(1) : '0.0'
-    };
-  }
 
   const MAX_RETRIES = 5;
 
@@ -897,78 +793,44 @@ async function updateSummaryTable(github, context, repo, status, issueNumber, bu
       let currentSummary = existingSummary;
       if (attempt > 1) {
         console.log(`Retry attempt ${attempt}: re-reading summary issue...`);
-        const freshIssues = await github.rest.issues.listForRepo({
-          owner: context.repo.owner,
-          repo: context.repo.repo,
-          state: 'all',
-          labels: 'maven4-summary'
-        });
-        currentSummary = freshIssues.data.find(issue => issue.title === summaryTitle);
-
-        // Re-check build ID on retry
-        if (currentSummary && currentSummary.body) {
-          const buildIdMatch = currentSummary.body.match(/Build ID:\s*([^\n]+)/);
-          const summaryBuildId = buildIdMatch ? buildIdMatch[1].trim() : null;
-          if (summaryBuildId && summaryBuildId !== currentBuildId) {
-            console.log(`Build ID mismatch on retry - skipping.`);
-            return;
-          }
+        const { issue: freshSummary, stale: freshStale } = await findSummaryIssue(
+          github, context, mavenIdentifier, currentBuildId
+        );
+        if (freshStale) {
+          console.log('Build ID mismatch on retry — skipping.');
+          return;
         }
+        currentSummary = freshSummary;
       }
 
       // Recompute table and stats from latest body
-      const latestTable = currentSummary ? processTableUpdate(currentSummary.body, firstErrorLine) :
-        '|Project|Status|Details|Error|\n|---|---|---|---|' + `\n|${repo}|${status}|[Details](${issueUrl})|${firstErrorLine}|`;
+      const latestTable = currentSummary
+        ? processTableUpdate(currentSummary.body, firstErrorLine)
+        : '|Project|Status|Details|Error|\n|---|---|---|---|' + `\n|${repo}|${status}|[Details](${issueUrl})|${firstErrorLine}|`;
 
-      const latestInfo = extractSummaryInfo(currentSummary ? currentSummary.body : null);
-      const latestStats = calculateStatistics(latestTable, latestInfo.totalProjects);
+      const { totalProjects, startDate } = extractSummaryInfo(currentSummary ? currentSummary.body : null);
+      const counts = countStatusesFromTable(latestTable);
+      const stats = calculateStats(counts, totalProjects);
 
-      const latestBody =
-        "# Maven Compatibility Testing Summary\n\n" +
-        "Testing with Maven 3.x first, then Maven 4.x if 3.x succeeds\n" +
-        "Maven 4.x version: " + mavenVersion + "\n" +
-        (mavenBranchOrCommit ?
-          "Building from branch/commit: " + mavenBranchOrCommit + "\n" : '') +
-        (latestInfo.startDate ? "Started: " + latestInfo.startDate + "\n" : '') +
-        "Last updated: " + new Date().toISOString() + "\n" +
-        "Build ID: " + currentBuildId + "\n\n" +
-        "## Summary Statistics\n\n" +
-        `- **Total Projects**: ${latestStats.total}\n` +
-        `- **Tested Projects**: ${latestStats.tested} (${latestStats.testedRatio}%)\n` +
-        `- **✅ Successful**: ${latestStats.success} (${latestStats.successRatio}%)\n` +
-        `- **⚠️ Maven 3.x Failed**: ${latestStats.maven3Failed} (${latestStats.maven3FailedRatio}%)\n` +
-        `- **❌ Maven 4.x Failed**: ${latestStats.maven4Failed} (${latestStats.maven4FailedRatio}%)\n` +
-        (latestStats.knownIssue > 0 ? `- **🔶 Known Issue**: ${latestStats.knownIssue} (${latestStats.knownIssueRatio}%)\n` : '') +
-        '\n' +
-        "## Detailed Results\n\n" +
-        latestTable;
+      const latestBody = buildSummaryBody({
+        mavenVersion, mavenBranchOrCommit, startDate, buildId: currentBuildId,
+        stats, tableContent: latestTable
+      });
 
       if (currentSummary) {
-        await github.graphql(`
-          mutation UpdateIssue($input: UpdateIssueInput!) {
-            updateIssue(input: $input) {
-              issue {
-                id
-              }
-              clientMutationId
-            }
-          }
-        `, {
-          input: {
-            id: currentSummary.node_id,
-            body: latestBody,
-            clientMutationId: `maven4-summary-${Date.now()}`
-          }
-        });
+        await updateSummaryIssue(
+          github, currentSummary.node_id, latestBody,
+          `maven4-summary-${Date.now()}`
+        );
       } else {
         await github.rest.issues.create({
           owner: context.repo.owner,
           repo: context.repo.repo,
-          title: summaryTitle,
+          title: getSummaryTitle(mavenIdentifier),
           body: latestBody,
           labels: ['maven4-summary']
         });
-        return; // New issue created, no need to verify
+        return;
       }
 
       // Verify the project row survived (detect concurrent overwrite)
@@ -985,7 +847,6 @@ async function updateSummaryTable(github, context, repo, status, issueNumber, bu
       }
 
       console.log(`Summary update for ${repo} was overwritten by concurrent update (attempt ${attempt}/${MAX_RETRIES})`);
-      // Random backoff before retry
       const backoffMs = Math.floor(Math.random() * 3000) + 1000;
       await new Promise(resolve => setTimeout(resolve, backoffMs));
 
