@@ -690,3 +690,22 @@ jobs:
           script: |
             const buildAndReport = require('./.github/scripts/build-and-report.js');
             await buildAndReport(github, context);
+
+  rebuild-summary:
+    needs: [test-maven4]
+    if: github.event.inputs.chunk_number != 'ALL' && always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Rebuild summary from individual issues
+        uses: actions/github-script@v8
+        env:
+          GITHUB_EVENT_INPUTS_MAVEN_VERSION: ${{ github.event.inputs.maven_version }}
+          GITHUB_EVENT_INPUTS_MAVEN_BRANCH_OR_COMMIT: ${{ github.event.inputs.maven_branch_or_commit }}
+          GITHUB_EVENT_INPUTS_CHUNK_NUMBER: ${{ github.event.inputs.chunk_number }}
+          GITHUB_EVENT_INPUTS_BUILD_ID: ${{ github.event.inputs.build_id }}
+        with:
+          script: |
+            const rebuildSummary = require('./.github/scripts/rebuild-summary.js');
+            await rebuildSummary(github, context);
