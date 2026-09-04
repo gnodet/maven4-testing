@@ -476,6 +476,33 @@ jobs:
             done
           fi
 
+          # Fallback: if static POM analysis didn't find JDK requirements,
+          # use mvn help:effective-pom to check the resolved model
+          if [ -z "$PROJECT_JDK" ] || [ "$PROJECT_JDK" = "17" ]; then
+            if [ -f "project/pom.xml" ]; then
+              echo "Static analysis found no JDK signal, trying effective-pom..." >&2
+              # Download Maven 3.9.9 for effective-pom analysis
+              if wget -q https://archive.apache.org/dist/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz -O /tmp/maven399.tar.gz 2>/dev/null; then
+                tar xzf /tmp/maven399.tar.gz -C /tmp/ 2>/dev/null
+                DETECT_MVN="/tmp/apache-maven-3.9.9/bin/mvn"
+                # Run effective-pom and extract compiler settings
+                EFFECTIVE_OUT=$(cd project && "$DETECT_MVN" -B -q help:effective-pom -Doutput=/dev/stdout -pl . 2>/dev/null < /dev/null || true)
+                if [ -n "$EFFECTIVE_OUT" ]; then
+                  # Check maven.compiler.source/target/release in effective model
+                  EFF_RELEASE=$(echo "$EFFECTIVE_OUT" | grep -oE '<maven\.compiler\.release>[^<]+' | sed 's/<maven.compiler.release>//' | head -1 || true)
+                  EFF_SOURCE=$(echo "$EFFECTIVE_OUT" | grep -oE '<maven\.compiler\.source>[^<]+' | sed 's/<maven.compiler.source>//' | head -1 || true)
+                  EFF_TARGET=$(echo "$EFFECTIVE_OUT" | grep -oE '<maven\.compiler\.target>[^<]+' | sed 's/<maven.compiler.target>//' | head -1 || true)
+                  for val in "$EFF_RELEASE" "$EFF_SOURCE" "$EFF_TARGET"; do
+                    CANDIDATE=$(echo "$val" | sed 's/^1\.//' | grep -oE '^[0-9]+' || true)
+                    update_jdk "$CANDIDATE" "effective-pom"
+                  done
+                  echo "  Effective-pom results: release=$EFF_RELEASE source=$EFF_SOURCE target=$EFF_TARGET" >&2
+                fi
+                rm -rf /tmp/apache-maven-3.9.9 /tmp/maven399.tar.gz 2>/dev/null
+              fi
+            fi
+          fi
+
           # Maven 4 requires JDK 17+, so enforce minimum
           if [ "$(echo "$JDK_VERSION" | grep -oE '[0-9]+')" -lt "17" ] 2>/dev/null; then
             echo "JDK $JDK_VERSION detected, but Maven 4 requires 17+. Upgrading to 17."
