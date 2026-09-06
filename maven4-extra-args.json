@@ -1,0 +1,7 @@
+{
+  "_comment": "Per-project extra Maven 4 CLI arguments. Key is the repo name (as used in chunk files), value is a string of extra args appended to the Maven 4 build command. Typical use: -Dmaven.maven3Personality=true for projects with TransitiveDependencyManager classpath issues.",
+  "airavata": "-Dmaven.maven3Personality=true",
+  "hbase-operator-tools": "-Dmaven.maven3Personality=true",
+  "hive": "-Dmaven.maven3Personality=true",
+  "hugegraph-toolchain": "-Dmaven.maven3Personality=true"
+}

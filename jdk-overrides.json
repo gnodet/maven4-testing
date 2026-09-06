@@ -16,5 +16,8 @@
   "sling-maven-launchpad-plugin": "11",
   "sling-org-apache-sling-datasource": "11",
   "sling-org-apache-sling-extensions-classloader-leak-detector": "11",
-  "hop": "21"
+  "hop": "21",
+  "ambari-metrics": "8",
+  "incubator-batchee": "8",
+  "hugegraph-commons": "11"
 }

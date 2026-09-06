@@ -22,6 +22,16 @@ function loadKnownIssues() {
   }
 }
 
+function loadExtraArgs(repo) {
+  try {
+    const extraArgsPath = path.join(process.cwd(), 'maven4-extra-args.json');
+    const extraArgs = JSON.parse(fs.readFileSync(extraArgsPath, 'utf8'));
+    return extraArgs[repo] || '';
+  } catch (error) {
+    return '';
+  }
+}
+
 function matchKnownIssue(repo, buildError) {
   const knownIssues = loadKnownIssues();
   const safeBuildError = buildError ? String(buildError) : '';
@@ -256,7 +266,7 @@ async function runMaven3Build() {
   return { maven3Success, maven3Output, maven3Error };
 }
 
-async function runMaven4Build() {
+async function runMaven4Build(extraArgs) {
   let buildSuccess = false;
   let mavenOutput = '';
   let buildError = '';
@@ -347,7 +357,11 @@ async function runMaven4Build() {
     }
 
     console.log('Running Maven 4.x build...');
-    const maven4Cmd = 'mvn -V -B -e clean package -DskipTests -Drat.skip=true -Dmaven.javadoc.skip=true -Dcheckstyle.skip=true -Denforcer.skip=true -Dspotless.check.skip=true -Dsort.skip=true -Dmaven.repo.local=${HOME}/.m2/repository-m4 2>&1';
+    const extraArgsStr = extraArgs ? ` ${extraArgs}` : '';
+    if (extraArgsStr) {
+      console.log(`Using extra args: ${extraArgsStr}`);
+    }
+    const maven4Cmd = `mvn -V -B -e clean package -DskipTests -Drat.skip=true -Dmaven.javadoc.skip=true -Dcheckstyle.skip=true -Denforcer.skip=true -Dspotless.check.skip=true -Dsort.skip=true -Dmaven.repo.local=\${HOME}/.m2/repository-m4${extraArgsStr} 2>&1`;
     let buildOutput;
     try {
       buildOutput = execSync(maven4Cmd, {
@@ -887,11 +901,18 @@ module.exports = async function(github, context) {
   let mvnupOutput = '';
   let maven4Duration = 0;
 
+  const repo = process.env.GITHUB_REPOSITORY_MATRIX || '';
+  const mavenVersion = process.env.GITHUB_EVENT_INPUTS_MAVEN_VERSION || '';
+  const mavenBranchOrCommit = process.env.GITHUB_EVENT_INPUTS_MAVEN_BRANCH_OR_COMMIT || '';
+  const chunkNumber = process.env.GITHUB_EVENT_INPUTS_CHUNK_NUMBER || '';
+  const buildId = process.env.GITHUB_EVENT_INPUTS_BUILD_ID || '';
+
   // Only run Maven 4.x if Maven 3.x succeeded
   if (maven3Success) {
     console.log('Maven 3.x build succeeded, proceeding with Maven 4.x...');
+    const extraArgs = loadExtraArgs(repo);
     const maven4StartTime = Date.now();
-    const maven4Results = await runMaven4Build();
+    const maven4Results = await runMaven4Build(extraArgs);
     maven4Duration = Date.now() - maven4StartTime;
     console.log(`Maven 4.x build completed in ${(maven4Duration / 1000).toFixed(1)}s`);
     buildSuccess = maven4Results.buildSuccess;
@@ -904,12 +925,6 @@ module.exports = async function(github, context) {
 
   const overallDuration = Date.now() - overallStartTime;
   console.log(`Overall test completed in ${(overallDuration / 1000).toFixed(1)}s`);
-
-  const repo = process.env.GITHUB_REPOSITORY_MATRIX || '';
-  const mavenVersion = process.env.GITHUB_EVENT_INPUTS_MAVEN_VERSION || '';
-  const mavenBranchOrCommit = process.env.GITHUB_EVENT_INPUTS_MAVEN_BRANCH_OR_COMMIT || '';
-  const chunkNumber = process.env.GITHUB_EVENT_INPUTS_CHUNK_NUMBER || '';
-  const buildId = process.env.GITHUB_EVENT_INPUTS_BUILD_ID || '';
 
   // Create/update individual project issue with timing information
   const timingInfo = {

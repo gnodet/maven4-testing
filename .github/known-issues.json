@@ -192,7 +192,9 @@
       "directory-server",
       "dubbo-feature-test",
       "hbase-filesystem",
-      "incubator-kie-optaplanner"
+      "incubator-kie-optaplanner",
+      "mina-asyncweb",
+      "myfaces-extcdi"
     ]
   },
   {
@@ -263,6 +265,7 @@
     ],
     "projectPatterns": [
       "druid",
+      "ignite",
       "incubator-seata"
     ]
   },
@@ -421,6 +424,39 @@
     ],
     "projectPatterns": [
       "dolphinscheduler-maven-plugin"
+    ]
+  },
+  {
+    "id": "blueprint-maven-plugin-asm5",
+    "description": "blueprint-maven-plugin:1.10.0 uses xbean-asm5 which cannot read JDK 17+ class files (ASM 5 max = Java 8). Unmaintained since 2018, no Maven 4-compatible version exists.",
+    "errorPatterns": [
+      "blueprint-maven-plugin",
+      "blueprint-generate"
+    ],
+    "projectPatterns": [
+      "aries"
+    ]
+  },
+  {
+    "id": "cxf-xjc-plugin-maven4",
+    "description": "cxf-xjc-plugin < 4.1.1 is not Maven 4 compatible (CXFXJC-46) — JAXB code generation fails, causing missing generated types at compile time",
+    "url": "https://issues.apache.org/jira/browse/CXFXJC-46",
+    "errorPatterns": [
+      "cannot find symbol"
+    ],
+    "projectPatterns": [
+      "activemq-cli-tools"
+    ]
+  },
+  {
+    "id": "javacpp-platform-classifier",
+    "description": "Dependencies using ${javacpp.platform} as classifier require the javacpp profile to be activated — the property is set by OS detection in javacpp's POM, and may not resolve correctly in Maven 4",
+    "errorPatterns": [
+      "${javacpp.platform}",
+      "was not found"
+    ],
+    "projectPatterns": [
+      "opennlp-sandbox"
     ]
   }
 ]
