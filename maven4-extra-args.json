@@ -3,5 +3,7 @@
   "airavata": "-Dmaven.maven3Personality=true",
   "hbase-operator-tools": "-Dmaven.maven3Personality=true",
   "hive": "-Dmaven.maven3Personality=true",
-  "hugegraph-toolchain": "-Dmaven.maven3Personality=true"
+  "hugegraph-toolchain": "-Dmaven.maven3Personality=true",
+  "ambari": "-Dmaven.maven3Personality=true",
+  "celeborn": "-Dmaven.maven3Personality=true"
 }

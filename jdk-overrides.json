@@ -19,5 +19,11 @@
   "hop": "21",
   "ambari-metrics": "8",
   "incubator-batchee": "8",
-  "hugegraph-commons": "11"
+  "hugegraph-commons": "11",
+  "kylin": 8,
+  "incubator-samoa": 8,
+  "portals-pluto": 8,
+  "rocketmq-ons": 8,
+  "rocketmq-remoting": 8,
+  "phoenix-omid": 8
 }

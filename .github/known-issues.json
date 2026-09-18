@@ -12,7 +12,7 @@
   },
   {
     "id": "nashorn-javascript-engine",
-    "description": "Sling parent POM uses maven-antrun-plugin with JavaScript (Nashorn engine) for set-bundle-required-execution-environment — Nashorn was removed in JDK 15. These projects need JDK ≤ 14 to build, or the antrun execution needs to be rewritten.",
+    "description": "Sling parent POM uses maven-antrun-plugin with JavaScript (Nashorn engine) for set-bundle-required-execution-environment \u2014 Nashorn was removed in JDK 15. These projects need JDK \u2264 14 to build, or the antrun execution needs to be rewritten.",
     "errorPatterns": [
       "Unable to create javax script engine for javascript"
     ],
@@ -22,7 +22,7 @@
   },
   {
     "id": "maven-bundle-plugin-cme",
-    "description": "maven-bundle-plugin hits ConcurrentModificationException under Maven 4 — likely due to concurrent access to project dependency collections with Maven 4's parallel-capable model",
+    "description": "maven-bundle-plugin hits ConcurrentModificationException under Maven 4 \u2014 likely due to concurrent access to project dependency collections with Maven 4's parallel-capable model",
     "errorPatterns": [
       "maven-bundle-plugin",
       "ConcurrentModificationException"
@@ -31,7 +31,7 @@
   },
   {
     "id": "relative-parent-not-found",
-    "description": "Project's parent.relativePath points to a sibling repository (e.g. ../../parent, ../brooklyn-server) that isn't checked out — multi-repo project layout that can't be tested standalone",
+    "description": "Project's parent.relativePath points to a sibling repository (e.g. ../../parent, ../brooklyn-server) that isn't checked out \u2014 multi-repo project layout that can't be tested standalone",
     "errorPatterns": [
       "parent.relativePath",
       "no POM could be found"
@@ -69,7 +69,7 @@
   },
   {
     "id": "commons-release-plugin-scm",
-    "description": "commons-release-plugin clean-staging fails under Maven 4 — commons-ognl is dormant",
+    "description": "commons-release-plugin clean-staging fails under Maven 4 \u2014 commons-ognl is dormant",
     "errorPatterns": [
       "commons-release-plugin",
       "Exception while executing SCM command"
@@ -78,7 +78,7 @@
   },
   {
     "id": "jax-maven-plugin-npe",
-    "description": "jax-maven-plugin 0.1.8 NPE under Maven 4 — plugin unmaintained, oozie is retired",
+    "description": "jax-maven-plugin 0.1.8 NPE under Maven 4 \u2014 plugin unmaintained, oozie is retired",
     "errorPatterns": [
       "jax-maven-plugin",
       "NullPointerException"
@@ -97,7 +97,7 @@
   },
   {
     "id": "transitive-dep-manager-enforcer",
-    "description": "TransitiveDependencyManager applies dependencyManagement at all depths, which can downgrade transitive dependency versions and trigger enforcer violations — this is intended Maven 4 behavior, projects need to add explicit dependencyManagement",
+    "description": "TransitiveDependencyManager applies dependencyManagement at all depths, which can downgrade transitive dependency versions and trigger enforcer violations \u2014 this is intended Maven 4 behavior, projects need to add explicit dependencyManagement",
     "url": "https://github.com/apache/maven/issues/12302#issuecomment-4751509112",
     "errorPatterns": [
       "maven-enforcer-plugin"
@@ -124,7 +124,7 @@
   },
   {
     "id": "property-interpolation-in-modules",
-    "description": "Maven 4 no longer interpolates properties in <module> paths at POM reading time — projects using ${spark.version} or similar in module names fail",
+    "description": "Maven 4 no longer interpolates properties in <module> paths at POM reading time \u2014 projects using ${spark.version} or similar in module names fail",
     "errorPatterns": [
       "Child subproject",
       "does not exist"
@@ -148,7 +148,7 @@
   },
   {
     "id": "snapshot-present-but-unavailable",
-    "description": "SNAPSHOT artifacts marked as 'present, but unavailable' under Maven 4's resolver — different metadata handling",
+    "description": "SNAPSHOT artifacts marked as 'present, but unavailable' under Maven 4's resolver \u2014 different metadata handling",
     "errorPatterns": [
       "present, but unavailable"
     ],
@@ -158,7 +158,7 @@
   },
   {
     "id": "prefix-filtering-blocks-artifacts",
-    "description": "Maven 4's prefix-based repository routing blocks artifacts not matching /.meta/prefixes.txt — artifacts available in Maven 3 become unfindable",
+    "description": "Maven 4's prefix-based repository routing blocks artifacts not matching /.meta/prefixes.txt \u2014 artifacts available in Maven 3 become unfindable",
     "errorPatterns": [
       "prefixes",
       "NOT allowed from repo"
@@ -170,7 +170,7 @@
   },
   {
     "id": "tycho-maven4-guice",
-    "description": "Tycho < 5.0 uses Guice/Sisu injection patterns broken by Maven 4's classloading — upgrade to Tycho 5.0.3+",
+    "description": "Tycho < 5.0 uses Guice/Sisu injection patterns broken by Maven 4's classloading \u2014 upgrade to Tycho 5.0.3+",
     "errorPatterns": [
       "tycho",
       "ProvisionException",
@@ -199,7 +199,7 @@
   },
   {
     "id": "transitive-dep-lost",
-    "description": "Maven 4's TransitiveDependencyManager changes transitive dependency resolution, causing previously available dependencies to disappear from the classpath — projects need to add explicit dependency declarations",
+    "description": "Maven 4's TransitiveDependencyManager changes transitive dependency resolution, causing previously available dependencies to disappear from the classpath \u2014 projects need to add explicit dependency declarations",
     "url": "https://github.com/apache/maven/issues/12302",
     "errorPatterns": [
       "package org.apache.hadoop",
@@ -212,7 +212,7 @@
   },
   {
     "id": "transitive-dep-lost-compilation",
-    "description": "Maven 4's TransitiveDependencyManager changes cause 'cannot find symbol' compilation errors — transitive dependencies no longer on classpath",
+    "description": "Maven 4's TransitiveDependencyManager changes cause 'cannot find symbol' compilation errors \u2014 transitive dependencies no longer on classpath",
     "url": "https://github.com/apache/maven/issues/12302",
     "errorPatterns": [
       "cannot find symbol"
@@ -224,7 +224,7 @@
   },
   {
     "id": "transitive-dep-lost-scala",
-    "description": "Maven 4's TransitiveDependencyManager changes cause Scala compilation errors — transitive dependencies (javax.annotation, etc.) no longer on classpath",
+    "description": "Maven 4's TransitiveDependencyManager changes cause Scala compilation errors \u2014 transitive dependencies (javax.annotation, etc.) no longer on classpath",
     "url": "https://github.com/apache/maven/issues/12302",
     "errorPatterns": [
       "is not a member of package"
@@ -271,7 +271,7 @@
   },
   {
     "id": "maven-site-plugin-velocity",
-    "description": "maven-site-plugin Velocity template rendering fails under Maven 4 — incompatible site plugin version",
+    "description": "maven-site-plugin Velocity template rendering fails under Maven 4 \u2014 incompatible site plugin version",
     "errorPatterns": [
       "Exception in macro #htmlContent",
       "Exception rendering"
@@ -326,7 +326,7 @@
   },
   {
     "id": "develocity-extension-slf4j",
-    "description": "Develocity Maven extension fails to initialize under Maven 4 due to SLF4J classloading changes — ClassNotFoundException: org.slf4j.impl.SimpleLogger",
+    "description": "Develocity Maven extension fails to initialize under Maven 4 due to SLF4J classloading changes \u2014 ClassNotFoundException: org.slf4j.impl.SimpleLogger",
     "errorPatterns": [
       "Develocity Maven extension",
       "SimpleLogger"
@@ -353,7 +353,7 @@
   },
   {
     "id": "duplicated-pom-tag",
-    "description": "Maven 4's stricter POM parser rejects duplicate XML elements (artifactId, properties, etc.) that Maven 3 silently accepted — project POMs need to be fixed",
+    "description": "Maven 4's stricter POM parser rejects duplicate XML elements (artifactId, properties, etc.) that Maven 3 silently accepted \u2014 project POMs need to be fixed",
     "errorPatterns": [
       "Duplicated tag"
     ],
@@ -369,7 +369,7 @@
   },
   {
     "id": "old-scala-tools-plugin",
-    "description": "Ancient org.scala-tools:maven-scala-plugin (unmaintained since 2011) calls add() on immutable lists returned by Maven 4 API — projects should migrate to net.alchim31.maven:scala-maven-plugin",
+    "description": "Ancient org.scala-tools:maven-scala-plugin (unmaintained since 2011) calls add() on immutable lists returned by Maven 4 API \u2014 projects should migrate to net.alchim31.maven:scala-maven-plugin",
     "errorPatterns": [
       "maven-scala-plugin",
       "UnsupportedOperationException"
@@ -378,7 +378,7 @@
   },
   {
     "id": "pgpverify-resolver-classcast",
-    "description": "pgpverify-maven-plugin < 1.20 hits ClassCastException with Maven 4's resolver re-entrancy marker in RequestTrace — resolver regression being tracked",
+    "description": "pgpverify-maven-plugin < 1.20 hits ClassCastException with Maven 4's resolver re-entrancy marker in RequestTrace \u2014 resolver regression being tracked",
     "url": "https://github.com/apache/maven-resolver/pull/1957",
     "errorPatterns": [
       "pgpverify-maven-plugin",
@@ -398,7 +398,7 @@
   },
   {
     "id": "jar-plugin-duplicate-execution",
-    "description": "Projects with multiple maven-jar-plugin executions producing the same unclassified artifact (e.g. prepare-jar + default-jar) fail after mvnup upgrades from 2.x to 3.x+ — the projectHasAlreadySetAnArtifact() check added in 3.0.0 rejects the second execution. This is a project-side issue, not a Maven 4 bug.",
+    "description": "Projects with multiple maven-jar-plugin executions producing the same unclassified artifact (e.g. prepare-jar + default-jar) fail after mvnup upgrades from 2.x to 3.x+ \u2014 the projectHasAlreadySetAnArtifact() check added in 3.0.0 rejects the second execution. This is a project-side issue, not a Maven 4 bug.",
     "errorPatterns": [
       "maven-jar-plugin",
       "classifier to attach supplemental artifacts"
@@ -407,7 +407,7 @@
   },
   {
     "id": "werror-bootstrap-classpath",
-    "description": "Projects using -Werror with -source 8 fail because javac emits 'bootstrap class path not set in conjunction with -source 8' warning when cross-compiling without a bootclasspath — project-side issue, not Maven 4 specific",
+    "description": "Projects using -Werror with -source 8 fail because javac emits 'bootstrap class path not set in conjunction with -source 8' warning when cross-compiling without a bootclasspath \u2014 project-side issue, not Maven 4 specific",
     "errorPatterns": [
       "-Werror specified",
       "bootstrap class path not set"
@@ -416,7 +416,7 @@
   },
   {
     "id": "maven-plugin-api-class-hierarchy",
-    "description": "Maven plugin projects fail to compile against Maven 4 API — MojoExecutionException not resolved as subclass of Throwable due to changed API jar structure. Project-side issue, closed as not planned (apache/maven#12990).",
+    "description": "Maven plugin projects fail to compile against Maven 4 API \u2014 MojoExecutionException not resolved as subclass of Throwable due to changed API jar structure. Project-side issue, closed as not planned (apache/maven#12990).",
     "url": "https://github.com/apache/maven/issues/12990",
     "errorPatterns": [
       "MojoExecutionException",
@@ -439,7 +439,7 @@
   },
   {
     "id": "cxf-xjc-plugin-maven4",
-    "description": "cxf-xjc-plugin < 4.1.1 is not Maven 4 compatible (CXFXJC-46) — JAXB code generation fails, causing missing generated types at compile time",
+    "description": "cxf-xjc-plugin < 4.1.1 is not Maven 4 compatible (CXFXJC-46) \u2014 JAXB code generation fails, causing missing generated types at compile time",
     "url": "https://issues.apache.org/jira/browse/CXFXJC-46",
     "errorPatterns": [
       "cannot find symbol"
@@ -450,13 +450,128 @@
   },
   {
     "id": "javacpp-platform-classifier",
-    "description": "Dependencies using ${javacpp.platform} as classifier require the javacpp profile to be activated — the property is set by OS detection in javacpp's POM, and may not resolve correctly in Maven 4",
+    "description": "Dependencies using ${javacpp.platform} as classifier require the javacpp profile to be activated \u2014 the property is set by OS detection in javacpp's POM, and may not resolve correctly in Maven 4",
     "errorPatterns": [
       "${javacpp.platform}",
       "was not found"
     ],
     "projectPatterns": [
       "opennlp-sandbox"
+    ]
+  },
+  {
+    "id": "jar-plugin-outputtimestamp-out-of-range",
+    "description": "maven-jar-plugin >= 3.3.0 (archiver >= 3.6.0) validates that project.build.outputTimestamp ISO-8601 strings are within 1980-2099. Projects using '1970-01-01T00:00:00Z' or other pre-1980 ISO dates fail after mvnup upgrades jar-plugin. Will be fixed in next maven-jar-plugin release (archiver will clamp instead of throwing).",
+    "errorPatterns": [
+      "is not within the valid range 1980-01-01T00:00:02Z"
+    ],
+    "projectPatterns": []
+  },
+  {
+    "id": "jar-plugin-invalid-auto-module-name",
+    "description": "maven-jar-plugin >= 3.3.0 (archiver >= 3.3.0) validates Automatic-Module-Name manifest entries. Projects using ${project.groupId}.${project.artifactId} as module name fail when artifactId contains hyphens (invalid JPMS module name). Will be fixed in next maven-jar-plugin release (archiver will warn and remove the attribute instead of throwing).",
+    "errorPatterns": [
+      "Invalid automatic module name:"
+    ],
+    "projectPatterns": []
+  },
+  {
+    "id": "exec-maven-plugin-getcontainer",
+    "description": "exec-maven-plugin <= 3.1.0 calls session.getContainer().lookup(ToolchainManager.ROLE) in ExecMojo.getToolchain() \u2014 MavenSession.getContainer() returns null in Maven 4. Fixed in exec-maven-plugin 3.2.0. mvnup upgrades exec but the version may be locked by a property in a parent POM.",
+    "errorPatterns": [
+      "exec-maven-plugin",
+      "Cannot invoke",
+      "PlexusContainer"
+    ],
+    "projectPatterns": [
+      "incubator-kie-optaplanner"
+    ]
+  },
+  {
+    "id": "license-automation-plugin-compat",
+    "description": "org.apache.hyracks:license-automation-plugin uses maven-compat DefaultModelInheritanceAssembler which throws UnsupportedOperationException in Maven 4 (all methods stubbed). The plugin needs to be updated.",
+    "errorPatterns": [
+      "license-automation-plugin",
+      "UnsupportedOperationException"
+    ],
+    "projectPatterns": [
+      "asterixdb"
+    ]
+  },
+  {
+    "id": "taverna-jdk-incompatible",
+    "description": "Apache Taverna projects use APIs that are incompatible with JDK 17: override conflicts with javax.swing (JDK changes), ambiguous FileSystem.newFileSystem overloads (JDK 13 added new overloads), and old XSD plugin failures. These are old archived projects.",
+    "errorPatterns": [
+      "org.apache.taverna"
+    ],
+    "projectPatterns": [
+      "incubator-taverna-engine",
+      "incubator-taverna-language",
+      "incubator-taverna-osgi"
+    ]
+  },
+  {
+    "id": "jdk-tools-system-dep",
+    "description": "Project declares a system dependency on jdk.tools:jdk.tools:jar:1.6 pointing to tools.jar at /usr/lib/jvm/..., which does not exist in JDK 9+ (tools.jar was removed). Maven 4 fails to resolve the system dependency path.",
+    "errorPatterns": [
+      "jdk.tools:jdk.tools",
+      "system"
+    ],
+    "projectPatterns": [
+      "incubator-twill",
+      "phoenix-tephra"
+    ]
+  },
+  {
+    "id": "bnd-artifact-unavailable",
+    "description": "karaf-reactive-components depends on biz.aQute.bnd:bnd-shared-maven-lib:5.1.0 which is not available in Maven Central (artifact was removed/relocated). Build fails at dependency resolution.",
+    "errorPatterns": [
+      "bnd-shared-maven-lib"
+    ],
+    "projectPatterns": [
+      "karaf-reactive-components"
+    ]
+  },
+  {
+    "id": "rat-check-after-mvnup",
+    "description": "mvnup modifications to pom.xml files trigger Apache RAT license checks that report new/modified files as having unapproved licenses. The build skips rat with -Drat.skip=true but some projects use custom RAT execution IDs or have non-standard configurations.",
+    "errorPatterns": [
+      "apache-rat-plugin",
+      "Too many files with unapproved license"
+    ],
+    "projectPatterns": [
+      "guacamole-client"
+    ]
+  },
+  {
+    "id": "karaf-services-plugin-bytecode",
+    "description": "org.apache.karaf.tooling:karaf-services-maven-plugin:4.2.8 was compiled with JDK 17 (class file version 61) but is loaded in an environment where the plugin classloader rejects it. Plugin is too old for the current JDK.",
+    "errorPatterns": [
+      "karaf-services-maven-plugin",
+      "Unsupported class file major version 61"
+    ],
+    "projectPatterns": [
+      "karaf-cave"
+    ]
+  },
+  {
+    "id": "scala-codegen-jdk17-incompatible",
+    "description": "Scala code generation (via scalac) fails with 'Error while emitting' on JDK 17+ with certain Scala versions. The Scala compiler version used by the project is not compatible with JDK 17.",
+    "errorPatterns": [
+      "Error while emitting"
+    ],
+    "projectPatterns": [
+      "paimon"
+    ]
+  },
+  {
+    "id": "scala-overload-ambiguity",
+    "description": "Scala compilation fails with 'ambiguous reference to overloaded definition' \u2014 JDK added new overloads (e.g. in Spark/Hadoop APIs) that conflict with existing Scala usage patterns.",
+    "errorPatterns": [
+      "ambiguous reference to overloaded definition"
+    ],
+    "projectPatterns": [
+      "phoenix-connectors"
     ]
   }
 ]
