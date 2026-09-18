@@ -455,7 +455,7 @@ async function runMaven4Build(extraArgs) {
   return { buildSuccess, mavenOutput, buildError, mvnupOutput };
 }
 
-async function createOrUpdateIndividualProjectIssue(github, context, repo, maven3Success, maven3Output, maven3Error, buildSuccess, mavenOutput, buildError, mvnupOutput, mavenVersion, mavenBranchOrCommit, chunkNumber, timingInfo) {
+async function createOrUpdateIndividualProjectIssue(github, context, repo, maven3Success, maven3Output, maven3Error, buildSuccess, mavenOutput, buildError, mvnupOutput, mavenVersion, mavenBranchOrCommit, chunkNumber, timingInfo, buildId) {
   // Skip issue creation for repos without pom.xml — these aren't Maven projects
   if (!maven3Success && maven3Output === 'No pom.xml found') {
     console.log(`Skipping issue creation for ${repo} — no pom.xml at project root`);
@@ -480,7 +480,9 @@ async function createOrUpdateIndividualProjectIssue(github, context, repo, maven
   }
 
   const mavenIdentifier = mavenBranchOrCommit ? `${mavenBranchOrCommit} (built with ${mavenVersion})` : mavenVersion;
-  const issueTitle = `Maven 4 Test Results: ${repo} (${mavenIdentifier})`;
+  const issueTitle = buildId
+    ? `Maven 4 Test Results: ${repo} (${mavenIdentifier}) [${buildId}]`
+    : `Maven 4 Test Results: ${repo} (${mavenIdentifier})`;
 
   const issues = await github.rest.issues.listForRepo({
     owner: context.repo.owner,
@@ -934,7 +936,7 @@ module.exports = async function(github, context) {
   };
 
   const { issueNumber, status, knownIssue } = await createOrUpdateIndividualProjectIssue(
-    github, context, repo, maven3Success, maven3Output, maven3Error, buildSuccess, mavenOutput, buildError, mvnupOutput, mavenVersion, mavenBranchOrCommit, chunkNumber, timingInfo
+    github, context, repo, maven3Success, maven3Output, maven3Error, buildSuccess, mavenOutput, buildError, mvnupOutput, mavenVersion, mavenBranchOrCommit, chunkNumber, timingInfo, buildId
   );
 
   // Skip summary update and issue tracking for non-Maven projects (no pom.xml)

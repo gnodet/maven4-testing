@@ -52,7 +52,9 @@ module.exports = async function rebuildSummary(github, context) {
 
   // 2. Fetch ALL individual project issues from this build
   const issuePrefix = 'Maven 4 Test Results:';
-  const titleSuffix = `(${mavenIdentifier})`;
+  const titleSuffix = currentBuildId
+    ? `(${mavenIdentifier}) [${currentBuildId}]`
+    : `(${mavenIdentifier})`;
 
   const allIssues = [];
   let page = 1;
